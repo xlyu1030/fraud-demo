@@ -1,4 +1,4 @@
-# Overwrite app.py with Comparative Attack Vector Metrics
+# Overwrite app.py with 3-Section Executive Summary
 code = """
 import streamlit as st
 import pandas as pd
@@ -53,7 +53,7 @@ with tab1:
     st.title("🔎 ATO Fraud Analysis & Solution Proposal")
     st.markdown("### **Executive Summary**")
     
-    # --- ROW 1: FINANCIAL IMPACT METRICS ---
+    # --- SECTION 1: FINANCIAL IMPACT METRICS ---
     total_vol = df['transaction_amount'].sum()
     fraud_vol = df[df['fraud_flag'] == 1]['transaction_amount'].sum()
     fraud_vol_rate = (fraud_vol / total_vol) * 100
@@ -65,54 +65,67 @@ with tab1:
     avg_fraud_ticket = df[df['fraud_flag'] == 1]['transaction_amount'].mean()
     avg_overall_ticket = df['transaction_amount'].mean()
     
-    st.markdown("**Financial Impact**")
+    st.markdown("#### 1. Financial Impact")
     r1c1, r1c2, r1c3, r1c4 = st.columns(4)
     r1c1.metric("Total Fraud Volume", f"${fraud_vol/1_000_000:.1f}M", f"{fraud_vol_rate:.1f}% of Volume")
     r1c2.metric("Fraud Sessions", f"{fraud_count/1000:.1f}K", f"{fraud_rate:.1f}% Rate")
     r1c3.metric("Avg Fraud Ticket", f"${avg_fraud_ticket:.0f}", f"vs ${avg_overall_ticket:.0f} Overall")
     r1c4.metric("Risk Insight", "Low Value Attack", "To Bypass 2FA")
     
-    # --- ROW 2: ATTACK PATTERN METRICS (Comparisons) ---
-    fraud_df = df[df['fraud_flag'] == 1]
-    legit_df = df[df['fraud_flag'] == 0]
-    
-    # 1. Bot Pressure: Failed Logins
-    avg_failed_logins_fraud = fraud_df['failed_logins_24h'].mean()
-    avg_failed_logins_legit = legit_df['failed_logins_24h'].mean()
-    
-    # 2. Cross-Border Rate
-    cb_rate_fraud = (fraud_df['is_traveling'].sum() / len(fraud_df)) * 100
-    cb_rate_legit = (legit_df['is_traveling'].sum() / len(legit_df)) * 100
-    
-    # 3. New Device Rate
-    nd_rate_fraud = (fraud_df['new_device'].sum() / len(fraud_df)) * 100
-    nd_rate_legit = (legit_df['new_device'].sum() / len(legit_df)) * 100
-    
-    # 4. Velocity Rate
-    vel_rate_fraud = (fraud_df['high_velocity_indicator'].sum() / len(fraud_df)) * 100
-    vel_rate_legit = (legit_df['high_velocity_indicator'].sum() / len(legit_df)) * 100
+    st.divider()
 
-    st.markdown("**Attack Vectors (Fraud vs Legit Comparison)**")
+    # --- PREPARE DATA SUBSETS FOR VECTORS ---
+    legit_df = df[df['fraud_flag'] == 0]
+    zero_fraud_df = df[(df['fraud_flag'] == 1) & (df['transaction_amount'] == 0)]
+    nonzero_fraud_df = df[(df['fraud_flag'] == 1) & (df['transaction_amount'] > 0)]
+    
+    # Helper to calculate metrics
+    def get_metrics(target_df, baseline_df):
+        bot = target_df['failed_logins_24h'].mean()
+        cb = (target_df['is_traveling'].sum() / len(target_df)) * 100
+        nd = (target_df['new_device'].sum() / len(target_df)) * 100
+        vel = (target_df['high_velocity_indicator'].sum() / len(target_df)) * 100
+        
+        # Baselines
+        base_bot = baseline_df['failed_logins_24h'].mean()
+        base_cb = (baseline_df['is_traveling'].sum() / len(baseline_df)) * 100
+        base_nd = (baseline_df['new_device'].sum() / len(baseline_df)) * 100
+        base_vel = (baseline_df['high_velocity_indicator'].sum() / len(baseline_df)) * 100
+        
+        return (bot, base_bot), (cb, base_cb), (nd, base_nd), (vel, base_vel)
+
+    # Calculate
+    zero_metrics = get_metrics(zero_fraud_df, legit_df)
+    nonzero_metrics = get_metrics(nonzero_fraud_df, legit_df)
+
+    # --- SECTION 2: CREDENTIAL STUFFING VECTORS ($0 FRAUD) ---
+    st.markdown("#### 2. Credential Stuffing Vectors ($0 Fraud - Bot Attacks)")
     r2c1, r2c2, r2c3, r2c4 = st.columns(4)
     
-    r2c1.metric("🤖 Bot Pressure", f"{avg_failed_logins_fraud:.1f} fails", 
-                f"vs {avg_failed_logins_legit:.1f} (Legit)", help="Avg failed logins per session")
-                
-    r2c2.metric("🌍 Cross-Border Rate", f"{cb_rate_fraud:.1f}%", 
-                f"vs {cb_rate_legit:.1f}% (Legit)", help="% of sessions where IP != User Country")
-                
-    r2c3.metric("📱 New Device Rate", f"{nd_rate_fraud:.1f}%", 
-                f"vs {nd_rate_legit:.1f}% (Legit)", help="% of sessions using a new device")
-                
-    r2c4.metric("🚀 High Velocity", f"{vel_rate_fraud:.1f}%", 
-                f"vs {vel_rate_legit:.1f}% (Legit)", help="% of sessions flagged for speed")
+    (bot, b_bot), (cb, b_cb), (nd, b_nd), (vel, b_vel) = zero_metrics
+    
+    r2c1.metric("🤖 Bot Pressure", f"{bot:.1f} fails", f"vs {b_bot:.1f} (Legit)", help="Failed logins/session")
+    r2c2.metric("🌍 Cross-Border", f"{cb:.1f}%", f"vs {b_cb:.1f}% (Legit)", help="IP != User Country")
+    r2c3.metric("📱 New Device", f"{nd:.1f}%", f"vs {b_nd:.1f}% (Legit)", help="Fresh Device ID")
+    r2c4.metric("🚀 High Velocity", f"{vel:.1f}%", f"vs {b_vel:.1f}% (Legit)", help="Speed Flags")
 
+    # --- SECTION 3: THEFT VECTORS (>$0 FRAUD) ---
+    st.markdown("#### 3. Theft Vectors (>$0 Fraud - Money Stolen)")
+    r3c1, r3c2, r3c3, r3c4 = st.columns(4)
+    
+    (bot, b_bot), (cb, b_cb), (nd, b_nd), (vel, b_vel) = nonzero_metrics
+    
+    r3c1.metric("🤖 Bot Pressure", f"{bot:.1f} fails", f"vs {b_bot:.1f} (Legit)")
+    r3c2.metric("🌍 Cross-Border", f"{cb:.1f}%", f"vs {b_cb:.1f}% (Legit)")
+    r3c3.metric("📱 New Device", f"{nd:.1f}%", f"vs {b_nd:.1f}% (Legit)")
+    r3c4.metric("🚀 High Velocity", f"{vel:.1f}%", f"vs {b_vel:.1f}% (Legit)")
+    
     st.divider()
     
     # --- INSIGHT 1: The $0 Transaction Discovery ---
     st.subheader("1. The 'Credential Stuffing' Discovery ($0 Transactions)")
     st.markdown(\"\"\"
-    **Finding:** A distinct pattern emerges when comparing **$0 Fraud** (Credential Checks) vs **>$0 Fraud** (Theft).\n
+    **Finding:** A distinct pattern emerges when comparing **$0 Fraud** (Credential Checks) vs **>$0 Fraud** (Theft).
     $0 attacks are automated and concentrated in specific high-risk vectors compared to standard payment fraud.
     \"\"\")
     
@@ -274,4 +287,4 @@ with tab2:
 with open("app.py", "w") as f:
     f.write(code)
 
-print("app.py updated with comparative metrics.")
+print("app.py updated with 3-section Executive Summary.")
