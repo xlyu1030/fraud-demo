@@ -77,7 +77,7 @@ with tab1:
     # --- INSIGHT 1: The $0 Transaction Discovery ---
     st.subheader("1. The 'Credential Stuffing' Discovery ($0 Transactions)")
     st.markdown(\"\"\"
-    **Finding:** A distinct pattern emerges when comparing **$0 Fraud (Credential Checks) vs >$0 Fraud** (Theft).\n
+    **Finding:** A distinct pattern emerges when comparing zero-dollar Fraud (Credential Checks) vs. non-zero-dollar Fraud (Theft).\n
     $0 attacks are automated and concentrated in specific high-risk vectors compared to standard payment fraud.
     \"\"\")
     
