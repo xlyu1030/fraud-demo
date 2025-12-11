@@ -78,7 +78,8 @@ with tab1:
     st.subheader("1. The 'Credential Stuffing' Discovery ($0 Transactions)")
     st.markdown(\"\"\"
     **Finding:** A distinct pattern emerges when comparing zero-dollar Fraud (Credential Checks) vs. non-zero-dollar Fraud (Theft).\n
-    $0 attacks are automated and concentrated in specific high-risk vectors compared to standard payment fraud.
+    $0 attacks are automated and concentrated in specific high-risk vectors compared to standard payment fraud.\n
+    High-risk vectors are \033[31m IP country, OS version, Device, and Browser.\033[0m
     \"\"\")
     
     # Prepare Data for Grouped Plot (Filter to Fraud Only)
