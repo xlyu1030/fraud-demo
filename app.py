@@ -1,4 +1,4 @@
-# Overwrite app.py with Enhanced Executive Summary (2 Rows of Metrics)
+# Overwrite app.py with Comparative Attack Vector Metrics
 code = """
 import streamlit as st
 import pandas as pd
@@ -72,7 +72,7 @@ with tab1:
     r1c3.metric("Avg Fraud Ticket", f"${avg_fraud_ticket:.0f}", f"vs ${avg_overall_ticket:.0f} Overall")
     r1c4.metric("Risk Insight", "Low Value Attack", "To Bypass 2FA")
     
-    # --- ROW 2: ATTACK PATTERN METRICS (New Flavors) ---
+    # --- ROW 2: ATTACK PATTERN METRICS (Comparisons) ---
     fraud_df = df[df['fraud_flag'] == 1]
     legit_df = df[df['fraud_flag'] == 0]
     
@@ -82,27 +82,30 @@ with tab1:
     
     # 2. Cross-Border Rate
     cb_rate_fraud = (fraud_df['is_traveling'].sum() / len(fraud_df)) * 100
+    cb_rate_legit = (legit_df['is_traveling'].sum() / len(legit_df)) * 100
     
     # 3. New Device Rate
     nd_rate_fraud = (fraud_df['new_device'].sum() / len(fraud_df)) * 100
+    nd_rate_legit = (legit_df['new_device'].sum() / len(legit_df)) * 100
     
     # 4. Velocity Rate
     vel_rate_fraud = (fraud_df['high_velocity_indicator'].sum() / len(fraud_df)) * 100
+    vel_rate_legit = (legit_df['high_velocity_indicator'].sum() / len(legit_df)) * 100
 
-    st.markdown("**Attack Vectors**")
+    st.markdown("**Attack Vectors (Fraud vs Legit Comparison)**")
     r2c1, r2c2, r2c3, r2c4 = st.columns(4)
     
-    r2c1.metric("🤖 Bot Pressure", f"{avg_failed_logins_fraud:.1f} fails/day", 
+    r2c1.metric("🤖 Bot Pressure", f"{avg_failed_logins_fraud:.1f} fails", 
                 f"vs {avg_failed_logins_legit:.1f} (Legit)", help="Avg failed logins per session")
                 
     r2c2.metric("🌍 Cross-Border Rate", f"{cb_rate_fraud:.1f}%", 
-                "IP Country != User Country", help="% of fraud coming from foreign IPs")
+                f"vs {cb_rate_legit:.1f}% (Legit)", help="% of sessions where IP != User Country")
                 
     r2c3.metric("📱 New Device Rate", f"{nd_rate_fraud:.1f}%", 
-                "Fresh Device ID", help="% of fraud using a never-before-seen device")
+                f"vs {nd_rate_legit:.1f}% (Legit)", help="% of sessions using a new device")
                 
     r2c4.metric("🚀 High Velocity", f"{vel_rate_fraud:.1f}%", 
-                "Flagged by Speed", help="% of fraud showing superhuman speed")
+                f"vs {vel_rate_legit:.1f}% (Legit)", help="% of sessions flagged for speed")
 
     st.divider()
     
@@ -271,4 +274,4 @@ with tab2:
 with open("app.py", "w") as f:
     f.write(code)
 
-print("app.py updated with new Executive Summary metrics.")
+print("app.py updated with comparative metrics.")
