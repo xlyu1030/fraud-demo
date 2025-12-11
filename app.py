@@ -1,4 +1,4 @@
-# Overwrite app.py with the updated Grouped Bar Charts for Device and Browser
+# Overwrite app.py with Dynamic Executive Summary Calculations
 code = """
 import streamlit as st
 import pandas as pd
@@ -53,44 +53,53 @@ with tab1:
     st.title("🔎 ATO Fraud Analysis & Solution Proposal")
     st.markdown("### **Executive Summary**")
     
+    # --- DYNAMIC CALCULATION OF METRICS ---
+    total_vol = df['transaction_amount'].sum()
+    fraud_vol = df[df['fraud_flag'] == 1]['transaction_amount'].sum()
+    fraud_vol_rate = (fraud_vol / total_vol) * 100
+    
+    total_count = len(df)
+    fraud_count = len(df[df['fraud_flag'] == 1])
+    fraud_rate = (fraud_count / total_count) * 100
+    
+    avg_fraud_ticket = df[df['fraud_flag'] == 1]['transaction_amount'].mean()
+    avg_overall_ticket = df['transaction_amount'].mean()
+    
+    # Display Dynamic Metrics
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total Fraud Volume", "$5.0M", "5.6% of Volume")
-    col2.metric("Fraud Sessions", "83,000", "11.4% Rate")
-    col3.metric("Avg Fraud Ticket", "$62", "vs $126 Overall")
+    col1.metric("Total Fraud Volume", f"${fraud_vol/1_000_000:.1f}M", f"{fraud_vol_rate:.1f}% of Volume")
+    col2.metric("Fraud Sessions", f"{fraud_count/1000:.1f}K", f"{fraud_rate:.1f}% Rate")
+    col3.metric("Avg Fraud Ticket", f"${avg_fraud_ticket:.0f}", f"vs ${avg_overall_ticket:.0f} Overall")
     col4.metric("Key Insight", "Low Value Attack", "To Bypass 2FA")
     
     st.divider()
     
-    # --- INSIGHT 1: The $0 Transaction Discovery (UPDATED GROUPED CHART) ---
+    # --- INSIGHT 1: The $0 Transaction Discovery ---
     st.subheader("1. The 'Credential Stuffing' Discovery ($0 Transactions)")
     st.markdown(\"\"\"
     **Finding:** A distinct pattern emerges when comparing **$0 Fraud** (Credential Checks) vs **>$0 Fraud** (Theft).
     $0 attacks are automated and concentrated in specific high-risk vectors compared to standard payment fraud.
     \"\"\")
     
-    # 1. Prepare Data for Grouped Plot (Filter to Fraud Only)
+    # Prepare Data for Grouped Plot (Filter to Fraud Only)
     fraud_df = df[df['fraud_flag'] == 1].copy()
     fraud_df['Txn Type'] = fraud_df['transaction_amount'].apply(lambda x: '$0 Fraud (Bot)' if x == 0 else '>$0 Fraud (Theft)')
     
     # Row 1: Country and OS
     c1, c2 = st.columns(2)
     
-    # --- Chart 1: IP Country Grouped ---
     with c1:
         top_countries = fraud_df['ip_country'].value_counts().head(10).index
         country_grp = fraud_df[fraud_df['ip_country'].isin(top_countries)].groupby(['ip_country', 'Txn Type']).size().reset_index(name='Count')
-        
         fig_country = px.bar(country_grp, x='ip_country', y='Count', color='Txn Type',
                              barmode='group', 
                              title="Top 10 Fraud Countries: $0 vs >$0",
                              color_discrete_map={'$0 Fraud (Bot)': '#FF4B4B', '>$0 Fraud (Theft)': '#1F77B4'})
         st.plotly_chart(fig_country, use_container_width=True)
         
-    # --- Chart 2: OS Version Grouped ---
     with c2:
         top_os = fraud_df['os_version'].value_counts().head(10).index
         os_grp = fraud_df[fraud_df['os_version'].isin(top_os)].groupby(['os_version', 'Txn Type']).size().reset_index(name='Count')
-        
         fig_os = px.bar(os_grp, x='os_version', y='Count', color='Txn Type',
                         barmode='group', 
                         title="Top 10 OS Versions: $0 vs >$0",
@@ -100,22 +109,18 @@ with tab1:
     # Row 2: Device and Browser
     c3, c4 = st.columns(2)
 
-    # --- Chart 3: Device Model Grouped ---
     with c3:
         top_devices = fraud_df['device_model'].value_counts().head(10).index
         device_grp = fraud_df[fraud_df['device_model'].isin(top_devices)].groupby(['device_model', 'Txn Type']).size().reset_index(name='Count')
-        
         fig_device = px.bar(device_grp, x='device_model', y='Count', color='Txn Type',
                              barmode='group', 
                              title="Top 10 Fraud Devices: $0 vs >$0",
                              color_discrete_map={'$0 Fraud (Bot)': '#FF4B4B', '>$0 Fraud (Theft)': '#1F77B4'})
         st.plotly_chart(fig_device, use_container_width=True)
 
-    # --- Chart 4: Browser Grouped ---
     with c4:
         top_browsers = fraud_df['browser'].value_counts().head(10).index
         browser_grp = fraud_df[fraud_df['browser'].isin(top_browsers)].groupby(['browser', 'Txn Type']).size().reset_index(name='Count')
-        
         fig_browser = px.bar(browser_grp, x='browser', y='Count', color='Txn Type',
                              barmode='group', 
                              title="Top 10 Fraud Browsers: $0 vs >$0",
@@ -234,4 +239,4 @@ with tab2:
 with open("app.py", "w") as f:
     f.write(code)
 
-print("app.py updated with additional grouped bar charts.")
+print("app.py updated with dynamic calculations.")
