@@ -1,4 +1,4 @@
-# Overwrite app.py with the updated Grouped Bar Chart logic
+# Overwrite app.py with the updated Grouped Bar Charts for Device and Browser
 code = """
 import streamlit as st
 import pandas as pd
@@ -72,14 +72,12 @@ with tab1:
     fraud_df = df[df['fraud_flag'] == 1].copy()
     fraud_df['Txn Type'] = fraud_df['transaction_amount'].apply(lambda x: '$0 Fraud (Bot)' if x == 0 else '>$0 Fraud (Theft)')
     
+    # Row 1: Country and OS
     c1, c2 = st.columns(2)
     
     # --- Chart 1: IP Country Grouped ---
     with c1:
-        # Get Top 10 Countries by Total Fraud to keep chart readable
         top_countries = fraud_df['ip_country'].value_counts().head(10).index
-        
-        # Group by Country AND Type
         country_grp = fraud_df[fraud_df['ip_country'].isin(top_countries)].groupby(['ip_country', 'Txn Type']).size().reset_index(name='Count')
         
         fig_country = px.bar(country_grp, x='ip_country', y='Count', color='Txn Type',
@@ -90,10 +88,7 @@ with tab1:
         
     # --- Chart 2: OS Version Grouped ---
     with c2:
-        # Get Top 10 OS by Total Fraud
         top_os = fraud_df['os_version'].value_counts().head(10).index
-        
-        # Group by OS AND Type
         os_grp = fraud_df[fraud_df['os_version'].isin(top_os)].groupby(['os_version', 'Txn Type']).size().reset_index(name='Count')
         
         fig_os = px.bar(os_grp, x='os_version', y='Count', color='Txn Type',
@@ -101,6 +96,31 @@ with tab1:
                         title="Top 10 OS Versions: $0 vs >$0",
                         color_discrete_map={'$0 Fraud (Bot)': '#FF4B4B', '>$0 Fraud (Theft)': '#1F77B4'})
         st.plotly_chart(fig_os, use_container_width=True)
+
+    # Row 2: Device and Browser
+    c3, c4 = st.columns(2)
+
+    # --- Chart 3: Device Model Grouped ---
+    with c3:
+        top_devices = fraud_df['device_model'].value_counts().head(10).index
+        device_grp = fraud_df[fraud_df['device_model'].isin(top_devices)].groupby(['device_model', 'Txn Type']).size().reset_index(name='Count')
+        
+        fig_device = px.bar(device_grp, x='device_model', y='Count', color='Txn Type',
+                             barmode='group', 
+                             title="Top 10 Fraud Devices: $0 vs >$0",
+                             color_discrete_map={'$0 Fraud (Bot)': '#FF4B4B', '>$0 Fraud (Theft)': '#1F77B4'})
+        st.plotly_chart(fig_device, use_container_width=True)
+
+    # --- Chart 4: Browser Grouped ---
+    with c4:
+        top_browsers = fraud_df['browser'].value_counts().head(10).index
+        browser_grp = fraud_df[fraud_df['browser'].isin(top_browsers)].groupby(['browser', 'Txn Type']).size().reset_index(name='Count')
+        
+        fig_browser = px.bar(browser_grp, x='browser', y='Count', color='Txn Type',
+                             barmode='group', 
+                             title="Top 10 Fraud Browsers: $0 vs >$0",
+                             color_discrete_map={'$0 Fraud (Bot)': '#FF4B4B', '>$0 Fraud (Theft)': '#1F77B4'})
+        st.plotly_chart(fig_browser, use_container_width=True)
 
     st.divider()
 
@@ -214,4 +234,4 @@ with tab2:
 with open("app.py", "w") as f:
     f.write(code)
 
-print("app.py updated with grouped bar charts.")
+print("app.py updated with additional grouped bar charts.")
