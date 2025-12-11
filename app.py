@@ -1,4 +1,4 @@
-# Overwrite app.py with Dynamic Executive Summary Calculations
+# Overwrite app.py with Enhanced Executive Summary (2 Rows of Metrics)
 code = """
 import streamlit as st
 import pandas as pd
@@ -53,7 +53,7 @@ with tab1:
     st.title("🔎 ATO Fraud Analysis & Solution Proposal")
     st.markdown("### **Executive Summary**")
     
-    # --- DYNAMIC CALCULATION OF METRICS ---
+    # --- ROW 1: FINANCIAL IMPACT METRICS ---
     total_vol = df['transaction_amount'].sum()
     fraud_vol = df[df['fraud_flag'] == 1]['transaction_amount'].sum()
     fraud_vol_rate = (fraud_vol / total_vol) * 100
@@ -65,33 +65,64 @@ with tab1:
     avg_fraud_ticket = df[df['fraud_flag'] == 1]['transaction_amount'].mean()
     avg_overall_ticket = df['transaction_amount'].mean()
     
-    # Display Dynamic Metrics
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total Fraud Volume", f"${fraud_vol/1_000_000:.1f}M", f"{fraud_vol_rate:.1f}% of Volume")
-    col2.metric("Fraud Sessions", f"{fraud_count/1000:.1f}K", f"{fraud_rate:.1f}% Rate")
-    col3.metric("Avg Fraud Ticket", f"${avg_fraud_ticket:.0f}", f"vs ${avg_overall_ticket:.0f} Overall")
-    col4.metric("Key Insight", "Low Value Attack", "To Bypass 2FA")
+    st.markdown("**Financial Impact**")
+    r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+    r1c1.metric("Total Fraud Volume", f"${fraud_vol/1_000_000:.1f}M", f"{fraud_vol_rate:.1f}% of Volume")
+    r1c2.metric("Fraud Sessions", f"{fraud_count/1000:.1f}K", f"{fraud_rate:.1f}% Rate")
+    r1c3.metric("Avg Fraud Ticket", f"${avg_fraud_ticket:.0f}", f"vs ${avg_overall_ticket:.0f} Overall")
+    r1c4.metric("Risk Insight", "Low Value Attack", "To Bypass 2FA")
     
+    # --- ROW 2: ATTACK PATTERN METRICS (New Flavors) ---
+    fraud_df = df[df['fraud_flag'] == 1]
+    legit_df = df[df['fraud_flag'] == 0]
+    
+    # 1. Bot Pressure: Failed Logins
+    avg_failed_logins_fraud = fraud_df['failed_logins_24h'].mean()
+    avg_failed_logins_legit = legit_df['failed_logins_24h'].mean()
+    
+    # 2. Cross-Border Rate
+    cb_rate_fraud = (fraud_df['is_traveling'].sum() / len(fraud_df)) * 100
+    
+    # 3. New Device Rate
+    nd_rate_fraud = (fraud_df['new_device'].sum() / len(fraud_df)) * 100
+    
+    # 4. Velocity Rate
+    vel_rate_fraud = (fraud_df['high_velocity_indicator'].sum() / len(fraud_df)) * 100
+
+    st.markdown("**Attack Vectors**")
+    r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+    
+    r2c1.metric("🤖 Bot Pressure", f"{avg_failed_logins_fraud:.1f} fails/day", 
+                f"vs {avg_failed_logins_legit:.1f} (Legit)", help="Avg failed logins per session")
+                
+    r2c2.metric("🌍 Cross-Border Rate", f"{cb_rate_fraud:.1f}%", 
+                "IP Country != User Country", help="% of fraud coming from foreign IPs")
+                
+    r2c3.metric("📱 New Device Rate", f"{nd_rate_fraud:.1f}%", 
+                "Fresh Device ID", help="% of fraud using a never-before-seen device")
+                
+    r2c4.metric("🚀 High Velocity", f"{vel_rate_fraud:.1f}%", 
+                "Flagged by Speed", help="% of fraud showing superhuman speed")
+
     st.divider()
     
     # --- INSIGHT 1: The $0 Transaction Discovery ---
     st.subheader("1. The 'Credential Stuffing' Discovery ($0 Transactions)")
     st.markdown(\"\"\"
-    **Finding:** A distinct pattern emerges when comparing zero-dollar Fraud (Credential Checks) vs. non-zero-dollar Fraud (Theft).\n
-    $0 attacks are automated and concentrated in specific high-risk vectors compared to standard payment fraud.\n
-    High-risk vectors are IP country, OS version, Device, and Browser.
+    **Finding:** A distinct pattern emerges when comparing **$0 Fraud** (Credential Checks) vs **>$0 Fraud** (Theft).
+    $0 attacks are automated and concentrated in specific high-risk vectors compared to standard payment fraud.
     \"\"\")
     
     # Prepare Data for Grouped Plot (Filter to Fraud Only)
-    fraud_df = df[df['fraud_flag'] == 1].copy()
-    fraud_df['Txn Type'] = fraud_df['transaction_amount'].apply(lambda x: '$0 Fraud (Bot)' if x == 0 else '>$0 Fraud (Theft)')
+    fraud_df_plot = df[df['fraud_flag'] == 1].copy()
+    fraud_df_plot['Txn Type'] = fraud_df_plot['transaction_amount'].apply(lambda x: '$0 Fraud (Bot)' if x == 0 else '>$0 Fraud (Theft)')
     
     # Row 1: Country and OS
     c1, c2 = st.columns(2)
     
     with c1:
-        top_countries = fraud_df['ip_country'].value_counts().head(10).index
-        country_grp = fraud_df[fraud_df['ip_country'].isin(top_countries)].groupby(['ip_country', 'Txn Type']).size().reset_index(name='Count')
+        top_countries = fraud_df_plot['ip_country'].value_counts().head(10).index
+        country_grp = fraud_df_plot[fraud_df_plot['ip_country'].isin(top_countries)].groupby(['ip_country', 'Txn Type']).size().reset_index(name='Count')
         fig_country = px.bar(country_grp, x='ip_country', y='Count', color='Txn Type',
                              barmode='group', 
                              title="Top 10 Fraud Countries: $0 vs >$0",
@@ -99,8 +130,8 @@ with tab1:
         st.plotly_chart(fig_country, use_container_width=True)
         
     with c2:
-        top_os = fraud_df['os_version'].value_counts().head(10).index
-        os_grp = fraud_df[fraud_df['os_version'].isin(top_os)].groupby(['os_version', 'Txn Type']).size().reset_index(name='Count')
+        top_os = fraud_df_plot['os_version'].value_counts().head(10).index
+        os_grp = fraud_df_plot[fraud_df_plot['os_version'].isin(top_os)].groupby(['os_version', 'Txn Type']).size().reset_index(name='Count')
         fig_os = px.bar(os_grp, x='os_version', y='Count', color='Txn Type',
                         barmode='group', 
                         title="Top 10 OS Versions: $0 vs >$0",
@@ -111,8 +142,8 @@ with tab1:
     c3, c4 = st.columns(2)
 
     with c3:
-        top_devices = fraud_df['device_model'].value_counts().head(10).index
-        device_grp = fraud_df[fraud_df['device_model'].isin(top_devices)].groupby(['device_model', 'Txn Type']).size().reset_index(name='Count')
+        top_devices = fraud_df_plot['device_model'].value_counts().head(10).index
+        device_grp = fraud_df_plot[fraud_df_plot['device_model'].isin(top_devices)].groupby(['device_model', 'Txn Type']).size().reset_index(name='Count')
         fig_device = px.bar(device_grp, x='device_model', y='Count', color='Txn Type',
                              barmode='group', 
                              title="Top 10 Fraud Devices: $0 vs >$0",
@@ -120,8 +151,8 @@ with tab1:
         st.plotly_chart(fig_device, use_container_width=True)
 
     with c4:
-        top_browsers = fraud_df['browser'].value_counts().head(10).index
-        browser_grp = fraud_df[fraud_df['browser'].isin(top_browsers)].groupby(['browser', 'Txn Type']).size().reset_index(name='Count')
+        top_browsers = fraud_df_plot['browser'].value_counts().head(10).index
+        browser_grp = fraud_df_plot[fraud_df_plot['browser'].isin(top_browsers)].groupby(['browser', 'Txn Type']).size().reset_index(name='Count')
         fig_browser = px.bar(browser_grp, x='browser', y='Count', color='Txn Type',
                              barmode='group', 
                              title="Top 10 Fraud Browsers: $0 vs >$0",
@@ -240,4 +271,4 @@ with tab2:
 with open("app.py", "w") as f:
     f.write(code)
 
-print("app.py updated with dynamic calculations.")
+print("app.py updated with new Executive Summary metrics.")
