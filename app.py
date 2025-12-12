@@ -1,4 +1,4 @@
-# Now overwrite app.py with the correct logic
+# Overwrite app.py with Hardcoded Policy Summary
 code = """
 import streamlit as st
 import pandas as pd
@@ -54,20 +54,8 @@ def load_data():
         
     return df
 
-@st.cache_data
-def load_policy_data():
-    try:
-        # Load the policy file directly
-        # Using encoding='utf-8' to handle potential special characters
-        return pd.read_csv("Book1.xlsx - Sheet1.csv")
-    except Exception as e:
-        st.error(f"Error loading policy file: {e}")
-        return pd.DataFrame()
-
 try:
     df = load_data()
-    df_policy = load_policy_data()
-    
     if df.empty:
         st.error("DS_interview.csv not found!")
         st.stop()
@@ -211,14 +199,23 @@ with tab1:
 
     st.divider()
     
-    # --- NEW SECTION: CURRENT POLICIES ---
+    # --- NEW SECTION: CURRENT POLICIES (HARDCODED SUMMARY) ---
     st.subheader("2. Current Fraud Policies and Vulnerabilities")
-    st.markdown("Current system gaps identified during the audit:")
-    # Display the dataframe directly, no fallback to fake data
-    if not df_policy.empty:
-        st.table(df_policy)
-    else:
-        st.warning("Policy file not found or empty.")
+    st.markdown("Summary of current system gaps based on audit:")
+    
+    policy_data = {
+        "Current Policy": [
+            "Fraud rule: login from new device, unusual transaction amount",
+            "Two-factor authentication for high-value transactions",
+            "Manual review of flagged activities by the security operations team"
+        ],
+        "Vulnerability / Impact": [
+            "Low capture rate (31% based on simulation).",
+            "Covers only 15% of fraud. (Covers 36% sessions, 85% volume).",
+            "Transaction delay by hours/days, impacting user experience and transaction rate."
+        ]
+    }
+    st.table(pd.DataFrame(policy_data))
 
 # ==============================================================================
 # TAB 2: CREDENTIAL STUFFING LAB
@@ -368,7 +365,7 @@ with tab2:
         st.plotly_chart(fig2, use_container_width=True)
 
 # ==============================================================================
-# TAB 3: MANAGER SIMULATOR
+# TAB 3: MANAGER SIMULATOR (Existing)
 # ==============================================================================
 with tab3:
     st.title("🎛️ Dynamic Fraud Strategy Simulator")
@@ -426,4 +423,4 @@ with tab3:
 with open("app.py", "w") as f:
     f.write(code)
 
-print("app.py updated with Policy Table from Book1.xlsx.")
+print("app.py updated with hardcoded policy table.")
