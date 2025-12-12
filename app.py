@@ -1,4 +1,4 @@
-# Overwrite app.py with Strategy Simulator Updates
+# Overwrite app.py with Syntax Error Fixed
 code = """
 import streamlit as st
 import pandas as pd
@@ -178,7 +178,7 @@ with tab2:
     }))
     st.divider()
     
-    # --- RULE 1 (Fixed: Removed Low Login) ---
+    # --- RULE 1 ---
     st.subheader("2. Rule 1 Playground")
     r1a, r1b = st.columns([1, 2])
     with r1a:
@@ -200,7 +200,7 @@ with tab2:
 
     st.divider()
 
-    # --- RULE 2 (Fixed: Removed High Login) ---
+    # --- RULE 2 ---
     st.subheader("3. Rule 2 Playground")
     r2a, r2b = st.columns([1, 2])
     with r2a:
@@ -227,9 +227,8 @@ with tab2:
 # ==============================================================================
 with tab3:
     st.title("💸 Theft Rule Lab")
-    st.markdown("**Context:** Transactions > $0.")
     
-    # 1. Define Rules (Proposed Logic)
+    # 1. Define Rules
     t1_c1 = (df['model_score'] >= 500)
     t1_c2 = (df['time_on_file'] <= 1000)
     t1_c3 = (df['failed_logins_24h'] >= 1)
@@ -247,7 +246,7 @@ with tab3:
     t_data = {
         "Rule": ["Rule 1 (High Score/Failures)", "Rule 2 (Low Score/High Login)"],
         "% Theft Caught (Recall)": [f"{m1[0]:.1f}%", f"{m2[0]:.1f}%"],
-        "% Theft Vol Caught": [f"{m1[1]:.1f}%", f"{m2[1]:.1f}%"],
+        "% Theft Volume Caught": [f"{m1[1]:.1f}%", f"{m2[1]:.1f}%"],
         "% Theft Missing": [f"{m1[2]:.1f}%", f"{m2[2]:.1f}%"],
         "% Theft Volume Missing": [f"{m1[3]:.1f}%", f"{m2[3]:.1f}%"],
         "Fraud Theft Caught": [f"{m1[4]:,}", f"{m2[4]:,}"],
@@ -331,18 +330,19 @@ with tab3:
         st.plotly_chart(px.pie(df_t2, names='Outcome', color='Outcome', height=300, color_discrete_map={'Theft Caught':'#2ca02c', 'Theft Missed':'#d62728', 'False Positive':'#ff7f0e', 'Legit Allowed':'#1f77b4'}), use_container_width=True)
 
 # ==============================================================================
-# TAB 4: STRATEGY SIMULATOR (RENAMED & UPDATED)
+# TAB 4: STRATEGY SIMULATOR (Renamed & Fixed)
 # ==============================================================================
 with tab4:
     st.title("🎛️ Strategy Simulator")
     
-    # --- NEW STRATEGY SECTIONS ---
     st.header("1. Credential Stuffing Strategy")
-    
     col_strat1, col_strat2 = st.columns(2)
     with col_strat1:
         st.success("**Rule 1: Brute Force Attacks**")
-        st.markdown("- **Action:** Email alerts for password change\n- **Action:** 2FA for next 3 logins")
+        st.markdown(\"\"\"
+        - **Action:** Email alerts for password change
+        - **Action:** 2FA for next 3 logins
+        \"\"\")
     
     with col_strat2:
         st.success("**Rule 2: Complex Bots**")
@@ -358,7 +358,6 @@ with tab4:
     
     st.divider()
     
-    # --- EXISTING SIMULATOR (MOVED DOWN) ---
     st.header("3. General Portfolio Simulation")
     
     with st.expander("⚙️ **General Simulation Controls**", expanded=True):
@@ -407,6 +406,7 @@ with tab4:
         m1.metric("💰 Fraud Volume Caught", f"${fraud_caught:,.0f}", f"{fraud_caught/total_fraud:.1%} of Total")
     else:
         m1.metric("💰 Fraud Volume Caught", f"${fraud_caught:,.0f}", "0% of Total")
+        
     m2.metric("⚠️ False Positives", f"{fp_count:,}", "Good Customers Impacted")
     
     fig_dec = px.histogram(sim_df, x='decision', color='fraud_flag', 
@@ -418,4 +418,4 @@ with tab4:
 with open("app.py", "w") as f:
     f.write(code)
 
-print("app.py updated: Strategy Simulator with CS strategies added.")
+print("app.py updated with Syntax Fix and Strategy Simulator.")
