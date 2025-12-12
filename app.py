@@ -1,4 +1,4 @@
-# Overwrite app.py with 3-Group Comparative Charts
+# Overwrite app.py with Base Version + New Credential Stuffing Lab Tab
 code = """
 import streamlit as st
 import pandas as pd
@@ -14,6 +14,9 @@ st.markdown(\"\"\"
     <style>
     .big-font { font-size:24px !important; font-weight: bold; }
     .metric-card { background-color: #f9f9f9; padding: 15px; border-radius: 10px; border-left: 5px solid #4CAF50; }
+    .stTabs [data-baseweb="tab-list"] { gap: 24px; }
+    .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: #f0f2f6; border-radius: 4px; padding: 0 16px; font-weight: 600; }
+    .stTabs [aria-selected="true"] { background-color: #e8f5e9; color: #2e7d32; }
     </style>
 \"\"\", unsafe_allow_html=True)
 
@@ -30,7 +33,8 @@ def load_data():
     df['is_new_user'] = df['time_on_file'] < 1000
     
     cols_to_numeric = ['model_score', 'time_on_file', 'failed_logins_24h', 'transaction_amount', 
-                       'login_attempts_24h', 'transaction_attempts', 'failed_transactions']
+                       'login_attempts_24h', 'transaction_attempts', 'failed_transactions', 
+                       'new_device', 'high_velocity_indicator']
     for col in cols_to_numeric:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
@@ -45,11 +49,35 @@ except Exception as e:
     st.error(f"Error loading data: {e}")
     st.stop()
 
-# --- 3. TABS SETUP ---
-tab1, tab2 = st.tabs(["📊 Analyst Report (Insights)", "🎛️ Manager Simulator (Live Strategy)"])
+# --- 3. HELPER FUNCTIONS ---
+def calculate_cs_metrics(df, rule_mask):
+    # Filter to $0 Population (Credential Stuffing Context)
+    df_zero = df[df['transaction_amount'] == 0].copy()
+    
+    if len(df_zero) == 0:
+        return 0, 0, 0.0
+        
+    fraud_zero = df_zero[df_zero['fraud_flag'] == 1]
+    legit_zero = df_zero[df_zero['fraud_flag'] == 0]
+    
+    # Caught: Fraud caught by rule
+    caught = fraud_zero[rule_mask[df_zero.index]].shape[0]
+    
+    # Missing: Fraud missed by rule
+    missing = fraud_zero[~rule_mask[df_zero.index]].shape[0]
+    
+    # FPR: Legit ($0) caught / Total Legit ($0)
+    fp_count = legit_zero[rule_mask[df_zero.index]].shape[0]
+    total_legit = legit_zero.shape[0]
+    fpr = (fp_count / total_legit * 100) if total_legit > 0 else 0.0
+    
+    return caught, missing, fpr
+
+# --- 4. TABS SETUP ---
+tab1, tab2, tab3 = st.tabs(["📊 Analyst Report (Insights)", "🤖 Credential Stuffing Lab", "🎛️ Manager Simulator"])
 
 # ==============================================================================
-# TAB 1: ANALYST REPORT (Insights)
+# TAB 1: ANALYST REPORT (Original Base Content)
 # ==============================================================================
 with tab1:
     st.title("🔎 ATO Fraud Analysis & Solution Proposal")
@@ -209,14 +237,123 @@ with tab1:
     })
     
     st.table(perf_data)
-    
-    st.markdown("---")
-    st.markdown("👉 **Go to the 'Manager Simulator' tab to test this rule live.**")
 
 # ==============================================================================
-# TAB 2: MANAGER SIMULATOR (Interactive)
+# TAB 2: CREDENTIAL STUFFING LAB (NEW REQUEST)
 # ==============================================================================
 with tab2:
+    st.title("🤖 Credential Stuffing Rule Lab")
+    st.markdown(\"\"\"
+    **Context:** This lab focuses exclusively on the **$0 Transaction Population**. 
+    Test specific rules to detect bots checking credentials while minimizing friction for legit users.
+    \"\"\")
+    
+    # --- PART 1: PROPOSED RULES PERFORMANCE ---
+    st.subheader("1. Proposed Rules Performance")
+    
+    cond1 = (df['login_attempts_24h'] >= 4)
+    cond2 = (df['login_attempts_24h'] < 4)
+    cond3 = (df['model_score'] >= 800)
+    cond4 = (df['failed_logins_24h'] >= 2)
+    cond5 = (df['transaction_attempts'] == 0)
+    cond6 = (df['time_on_file'] < 1878)
+    
+    rule1_mask = cond1
+    rule2_mask = cond2 & cond3 & cond4 & cond5 & cond6
+    
+    r1_caught, r1_miss, r1_fpr = calculate_cs_metrics(df, rule1_mask)
+    r2_caught, r2_miss, r2_fpr = calculate_cs_metrics(df, rule2_mask)
+    
+    res_data = {
+        "Rule Name": ["Rule 1 (Brute Force)", "Rule 2 (Complex Bot)"],
+        "Logic": ["Login Attempts >= 4", "Login<4 & Score>=800 & Fail>=2 & Txn==0 & Time<1878"],
+        "CS Caught": [f"{r1_caught:,}", f"{r2_caught:,}"],
+        "CS Missing": [f"{r1_miss:,}", f"{r2_miss:,}"],
+        "False Positive Rate ($0 Legit)": [f"{r1_fpr:.2f}%", f"{r2_fpr:.2f}%"]
+    }
+    st.table(pd.DataFrame(res_data))
+    
+    st.divider()
+    
+    # --- PART 2: INTERACTIVE RULE BUILDER ---
+    st.subheader("2. Interactive Rule Builder")
+    st.markdown("Adjust thresholds and combine conditions to design a **New Custom Rule**.")
+    
+    col_settings, col_results = st.columns([1, 2])
+    
+    with col_settings:
+        st.markdown("**1. Adjust Cutoffs**")
+        p_login = st.slider("Login Attempts (Cutoff)", 0, 20, 4)
+        p_score = st.slider("Model Score (Cutoff)", 0, 1000, 800)
+        p_fail = st.slider("Failed Logins (Cutoff)", 0, 10, 2)
+        p_time = st.slider("Time on File (Cutoff)", 0, 3000, 1878)
+        p_txn = st.number_input("Transaction Attempts (Exact)", value=0, min_value=0)
+        
+        st.markdown("**2. Combine Conditions**")
+        use_c1 = st.checkbox(f"Login Attempts >= {p_login}", value=False)
+        use_c2 = st.checkbox(f"Login Attempts < {p_login}", value=False)
+        use_c3 = st.checkbox(f"Model Score >= {p_score}", value=False)
+        use_c4 = st.checkbox(f"Failed Logins >= {p_fail}", value=False)
+        use_c5 = st.checkbox(f"Transaction Attempts == {p_txn}", value=False)
+        use_c6 = st.checkbox(f"Time on File < {p_time}", value=False)
+
+    with col_results:
+        custom_mask = pd.Series([True] * len(df))
+        conditions_selected = []
+        
+        if use_c1: 
+            custom_mask &= (df['login_attempts_24h'] >= p_login)
+            conditions_selected.append(f"Login >= {p_login}")
+        if use_c2: 
+            custom_mask &= (df['login_attempts_24h'] < p_login)
+            conditions_selected.append(f"Login < {p_login}")
+        if use_c3: 
+            custom_mask &= (df['model_score'] >= p_score)
+            conditions_selected.append(f"Score >= {p_score}")
+        if use_c4: 
+            custom_mask &= (df['failed_logins_24h'] >= p_fail)
+            conditions_selected.append(f"Fail >= {p_fail}")
+        if use_c5: 
+            custom_mask &= (df['transaction_attempts'] == p_txn)
+            conditions_selected.append(f"Txn == {p_txn}")
+        if use_c6: 
+            custom_mask &= (df['time_on_file'] < p_time)
+            conditions_selected.append(f"Time < {p_time}")
+            
+        if not any([use_c1, use_c2, use_c3, use_c4, use_c5, use_c6]):
+            custom_mask = pd.Series([False] * len(df))
+            st.warning("⚠️ No conditions selected. The rule is currently inactive.")
+        else:
+            logic_str = " AND ".join(conditions_selected)
+            st.success(f"**Current Logic:** {logic_str}")
+
+        c_caught, c_miss, c_fpr = calculate_cs_metrics(df, custom_mask)
+        
+        m1, m2, m3 = st.columns(3)
+        m1.metric("CS Caught", f"{c_caught:,}")
+        m2.metric("CS Missing", f"{c_miss:,}")
+        m3.metric("False Positive Rate", f"{c_fpr:.2f}%")
+        
+        # Pie Chart Visualization
+        df_zero = df[df['transaction_amount'] == 0].copy()
+        df_zero['Outcome'] = 'Legit Allowed'
+        mask_caught = (df_zero['fraud_flag'] == 1) & (custom_mask[df_zero.index])
+        df_zero.loc[mask_caught, 'Outcome'] = 'Fraud Caught'
+        mask_missed = (df_zero['fraud_flag'] == 1) & (~custom_mask[df_zero.index])
+        df_zero.loc[mask_missed, 'Outcome'] = 'Fraud Missed'
+        mask_fp = (df_zero['fraud_flag'] == 0) & (custom_mask[df_zero.index])
+        df_zero.loc[mask_fp, 'Outcome'] = 'False Positive'
+
+        counts = df_zero['Outcome'].value_counts()
+        fig = px.pie(values=counts.values, names=counts.index, title="Rule Impact on $0 Transactions",
+                     color=counts.index,
+                     color_discrete_map={'Fraud Caught': '#2ca02c', 'Fraud Missed': '#d62728', 'False Positive': '#ff7f0e', 'Legit Allowed': '#1f77b4'})
+        st.plotly_chart(fig, use_container_width=True)
+
+# ==============================================================================
+# TAB 3: MANAGER SIMULATOR (Original Content)
+# ==============================================================================
+with tab3:
     st.title("🎛️ Dynamic Fraud Strategy Simulator")
     
     # --- SIDEBAR CONTROLS ---
@@ -303,4 +440,4 @@ with tab2:
 with open("app.py", "w") as f:
     f.write(code)
 
-print("app.py updated with 3-group comparative charts.")
+print("app.py successfully overwritten with Merged Version.")
