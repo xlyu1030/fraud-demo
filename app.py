@@ -1,4 +1,4 @@
-# Overwrite app.py with Dark Tabs and Expanded Metrics
+# Overwrite app.py with Renamed Precision Metric
 code = """
 import streamlit as st
 import pandas as pd
@@ -74,13 +74,12 @@ def calculate_cs_metrics(df, rule_mask):
     fraud_zero = df_zero[df_zero['fraud_flag'] == 1]
     legit_zero = df_zero[df_zero['fraud_flag'] == 0]
     
-    # 1. Caught
+    # 1. Caught (True Positive)
     caught = fraud_zero[rule_mask[df_zero.index]].shape[0]
     total_fraud = fraud_zero.shape[0]
     pct_caught = (caught / total_fraud * 100) if total_fraud > 0 else 0.0
-    tpr = pct_caught # True Positive Rate is Recall (% Caught)
     
-    # 2. Missing
+    # 2. Missing (False Negative)
     missing = fraud_zero[~rule_mask[df_zero.index]].shape[0]
     pct_missing = (missing / total_fraud * 100) if total_fraud > 0 else 0.0
     
@@ -91,7 +90,12 @@ def calculate_cs_metrics(df, rule_mask):
     total_flagged = caught + fp_count
     fpr_user = (fp_count / total_flagged * 100) if total_flagged > 0 else 0.0
     
-    return caught, missing, fp_count, pct_caught, pct_missing, fpr_user, tpr
+    # 5. TPR (User Defined: Precision -> TP / (TP + FP))
+    # Note: Standard TPR is Recall, but User explicitly requested Precision here.
+    # Label will be "Precision (True CS Rate)"
+    tpr_user = (caught / total_flagged * 100) if total_flagged > 0 else 0.0
+    
+    return caught, missing, fp_count, pct_caught, pct_missing, fpr_user, tpr_user
 
 # --- 4. TABS SETUP ---
 tab1, tab2, tab3 = st.tabs(["📊 Analyst Report (Insights)", "🤖 Credential Stuffing Lab", "🎛️ Manager Simulator"])
@@ -226,10 +230,10 @@ with tab2:
     res_data = {
         "Rule Name": ["Rule 1 (Brute Force)", "Rule 2 (Complex Bot)"],
         "Logic": ["Login Attempts >= 4", "Login<4 & Score>=800 & Fail>=2 & Txn==0 & Time<1878"],
-        "True Positive Rate (TPR)": [f"{r1_tpr:.1f}%", f"{r2_tpr:.1f}%"],
+        "Precision (True CS Rate)": [f"{r1_tpr:.1f}%", f"{r2_tpr:.1f}%"], # Renamed as requested
+        "% CS Caught (Recall)": [f"{r1_pct_caught:.1f}%", f"{r2_pct_caught:.1f}%"],
         "CS Caught Count": [f"{r1_caught:,}", f"{r2_caught:,}"],
         "CS Missing Count": [f"{r1_miss:,}", f"{r2_miss:,}"],
-        "% CS Missing": [f"{r1_pct_miss:.1f}%", f"{r2_pct_miss:.1f}%"],
         "Legit FP Count": [f"{r1_fp:,}", f"{r2_fp:,}"],
         "False Positive Rate": [f"{r1_fpr:.2f}%", f"{r2_fpr:.2f}%"]
     }
@@ -271,13 +275,12 @@ with tab2:
             
         c1, m1, fp1, pc1, pm1, fpr1, tpr1 = calculate_cs_metrics(df, mask1)
         
-        # Expanded Metrics Display
         st.markdown("**Performance Metrics**")
         m_a, m_b, m_c, m_d = st.columns(4)
-        m_a.metric("True Positive Rate", f"{tpr1:.1f}%")
-        m_b.metric("Caught Count", f"{c1:,}")
-        m_c.metric("Missing Count", f"{m1:,}")
-        m_d.metric("% Missing", f"{pm1:.1f}%")
+        m_a.metric("Precision (True CS Rate)", f"{tpr1:.1f}%")
+        m_b.metric("% CS Caught (Recall)", f"{pc1:.1f}%")
+        m_c.metric("Caught Count", f"{c1:,}")
+        m_d.metric("Missing Count", f"{m1:,}")
         
         m_e, m_f = st.columns(2)
         m_e.metric("Legit False Positives", f"{fp1:,}")
@@ -330,10 +333,10 @@ with tab2:
         
         st.markdown("**Performance Metrics**")
         n_a, n_b, n_c, n_d = st.columns(4)
-        n_a.metric("True Positive Rate", f"{tpr2:.1f}%")
-        n_b.metric("Caught Count", f"{c2_c:,}")
-        n_c.metric("Missing Count", f"{m2_c:,}")
-        n_d.metric("% Missing", f"{pm2:.1f}%")
+        n_a.metric("Precision (True CS Rate)", f"{tpr2:.1f}%")
+        n_b.metric("% CS Caught (Recall)", f"{pc2:.1f}%")
+        n_c.metric("Caught Count", f"{c2_c:,}")
+        n_d.metric("Missing Count", f"{m2_c:,}")
         
         n_e, n_f = st.columns(2)
         n_e.metric("Legit False Positives", f"{fp2:,}")
@@ -396,7 +399,7 @@ with tab3:
     
     m1, m2, m3 = st.columns(3)
     m1.metric("💰 Fraud Volume Caught", f"${fraud_caught:,.0f}", f"{fraud_caught/total_fraud:.1%} of Total")
-    m2.metric("⚠️ False Positives", f"{fp_count:,}")
+    m2.metric("⚠️ False Positives", f"{fp_count:,}", "Good Customers Impacted")
     
     fig_dec = px.histogram(sim_df, x='decision', color='fraud_flag', 
                            title="Strategy Outcome",
@@ -407,4 +410,4 @@ with tab3:
 with open("app.py", "w") as f:
     f.write(code)
 
-print("app.py updated: Dark tabs, TPR added, Full metrics in playgrounds.")
+print("app.py updated with renamed precision metric.")
