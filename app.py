@@ -1,12 +1,4 @@
-import pandas as pd
 
-# Read the policy file to verify content
-try:
-    df_policy = pd.read_csv("Book1.xlsx - Sheet1.csv")
-    print("Policy File Content:")
-    print(df_policy.to_string())
-except Exception as e:
-    print(f"Error reading policy file: {e}")
 
 # Now overwrite app.py with the correct logic
 code = """
