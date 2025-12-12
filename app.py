@@ -1,4 +1,4 @@
-# Overwrite app.py: Move Manager Controls from Sidebar to Tab 3 Main Body
+# Overwrite app.py with Dark Tabs and Expanded Metrics
 code = """
 import streamlit as st
 import pandas as pd
@@ -14,9 +14,23 @@ st.markdown(\"\"\"
     <style>
     .big-font { font-size:24px !important; font-weight: bold; }
     .metric-card { background-color: #f9f9f9; padding: 15px; border-radius: 10px; border-left: 5px solid #4CAF50; }
-    .stTabs [data-baseweb="tab-list"] { gap: 24px; }
-    .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: #f0f2f6; border-radius: 4px; padding: 0 16px; font-weight: 600; }
-    .stTabs [aria-selected="true"] { background-color: #e8f5e9; color: #2e7d32; }
+    
+    /* Dark Tab Headers */
+    .stTabs [data-baseweb="tab-list"] { gap: 24px; background-color: transparent; }
+    .stTabs [data-baseweb="tab"] { 
+        height: 50px; 
+        white-space: pre-wrap; 
+        background-color: #2E4053; 
+        color: white; 
+        border-radius: 4px; 
+        padding: 0 16px; 
+        font-weight: 600; 
+    }
+    .stTabs [aria-selected="true"] { 
+        background-color: #17202A; 
+        color: #00CC96; 
+        border: 2px solid #00CC96;
+    }
     </style>
 \"\"\", unsafe_allow_html=True)
 
@@ -51,26 +65,33 @@ except Exception as e:
 
 # --- 3. HELPER FUNCTIONS ---
 def calculate_cs_metrics(df, rule_mask):
+    # Filter to $0 Population (Credential Stuffing Context)
     df_zero = df[df['transaction_amount'] == 0].copy()
+    
     if len(df_zero) == 0:
-        return 0, 0, 0, 0.0, 0.0, 0.0
+        return 0, 0, 0, 0.0, 0.0, 0.0, 0.0
         
     fraud_zero = df_zero[df_zero['fraud_flag'] == 1]
     legit_zero = df_zero[df_zero['fraud_flag'] == 0]
     
+    # 1. Caught
     caught = fraud_zero[rule_mask[df_zero.index]].shape[0]
     total_fraud = fraud_zero.shape[0]
     pct_caught = (caught / total_fraud * 100) if total_fraud > 0 else 0.0
+    tpr = pct_caught # True Positive Rate is Recall (% Caught)
     
+    # 2. Missing
     missing = fraud_zero[~rule_mask[df_zero.index]].shape[0]
     pct_missing = (missing / total_fraud * 100) if total_fraud > 0 else 0.0
     
+    # 3. FP Count
     fp_count = legit_zero[rule_mask[df_zero.index]].shape[0]
     
+    # 4. FPR (User Defined: FP / (TP + FP))
     total_flagged = caught + fp_count
     fpr_user = (fp_count / total_flagged * 100) if total_flagged > 0 else 0.0
     
-    return caught, missing, fp_count, pct_caught, pct_missing, fpr_user
+    return caught, missing, fp_count, pct_caught, pct_missing, fpr_user, tpr
 
 # --- 4. TABS SETUP ---
 tab1, tab2, tab3 = st.tabs(["📊 Analyst Report (Insights)", "🤖 Credential Stuffing Lab", "🎛️ Manager Simulator"])
@@ -199,15 +220,15 @@ with tab2:
     rule1_mask = cond1
     rule2_mask = cond2 & cond3 & cond4 & cond5 & cond6
     
-    r1_caught, r1_miss, r1_fp, r1_pct_caught, r1_pct_miss, r1_fpr = calculate_cs_metrics(df, rule1_mask)
-    r2_caught, r2_miss, r2_fp, r2_pct_caught, r2_pct_miss, r2_fpr = calculate_cs_metrics(df, rule2_mask)
+    r1_caught, r1_miss, r1_fp, r1_pct_caught, r1_pct_miss, r1_fpr, r1_tpr = calculate_cs_metrics(df, rule1_mask)
+    r2_caught, r2_miss, r2_fp, r2_pct_caught, r2_pct_miss, r2_fpr, r2_tpr = calculate_cs_metrics(df, rule2_mask)
     
     res_data = {
         "Rule Name": ["Rule 1 (Brute Force)", "Rule 2 (Complex Bot)"],
         "Logic": ["Login Attempts >= 4", "Login<4 & Score>=800 & Fail>=2 & Txn==0 & Time<1878"],
-        "CS Caught": [f"{r1_caught:,}", f"{r2_caught:,}"],
-        "CS Missing": [f"{r1_miss:,}", f"{r2_miss:,}"],
-        "% CS Caught": [f"{r1_pct_caught:.1f}%", f"{r2_pct_caught:.1f}%"],
+        "True Positive Rate (TPR)": [f"{r1_tpr:.1f}%", f"{r2_tpr:.1f}%"],
+        "CS Caught Count": [f"{r1_caught:,}", f"{r2_caught:,}"],
+        "CS Missing Count": [f"{r1_miss:,}", f"{r2_miss:,}"],
         "% CS Missing": [f"{r1_pct_miss:.1f}%", f"{r2_pct_miss:.1f}%"],
         "Legit FP Count": [f"{r1_fp:,}", f"{r2_fp:,}"],
         "False Positive Rate": [f"{r1_fpr:.2f}%", f"{r2_fpr:.2f}%"]
@@ -248,11 +269,19 @@ with tab2:
         if not any([u1_c1, u1_c2, u1_c3, u1_c4, u1_c5, u1_c6]): mask1 = pd.Series([False]*len(df))
         else: st.info(f"**Logic:** {' AND '.join(conds1)}")
             
-        c1, m1, fp1, pc1, pm1, fpr1 = calculate_cs_metrics(df, mask1)
-        c_a, c_b, c_c = st.columns(3)
-        c_a.metric("% CS Caught", f"{pc1:.1f}%")
-        c_b.metric("Legit FP Count", f"{fp1:,}")
-        c_c.metric("False Positive Rate", f"{fpr1:.2f}%")
+        c1, m1, fp1, pc1, pm1, fpr1, tpr1 = calculate_cs_metrics(df, mask1)
+        
+        # Expanded Metrics Display
+        st.markdown("**Performance Metrics**")
+        m_a, m_b, m_c, m_d = st.columns(4)
+        m_a.metric("True Positive Rate", f"{tpr1:.1f}%")
+        m_b.metric("Caught Count", f"{c1:,}")
+        m_c.metric("Missing Count", f"{m1:,}")
+        m_d.metric("% Missing", f"{pm1:.1f}%")
+        
+        m_e, m_f = st.columns(2)
+        m_e.metric("Legit False Positives", f"{fp1:,}")
+        m_f.metric("False Positive Rate", f"{fpr1:.2f}%")
         
         df_z = df[df['transaction_amount'] == 0].copy()
         df_z['Outcome'] = 'Legit Allowed'
@@ -297,11 +326,18 @@ with tab2:
         if not any([u2_c1, u2_c2, u2_c3, u2_c4, u2_c5, u2_c6]): mask2 = pd.Series([False]*len(df))
         else: st.info(f"**Logic:** {' AND '.join(conds2)}")
             
-        c2_c, m2_c, fp2, pc2, pm2, fpr2 = calculate_cs_metrics(df, mask2)
-        c_x, c_y, c_z = st.columns(3)
-        c_x.metric("% CS Caught", f"{pc2:.1f}%")
-        c_y.metric("Legit FP Count", f"{fp2:,}")
-        c_z.metric("False Positive Rate", f"{fpr2:.2f}%")
+        c2_c, m2_c, fp2, pc2, pm2, fpr2, tpr2 = calculate_cs_metrics(df, mask2)
+        
+        st.markdown("**Performance Metrics**")
+        n_a, n_b, n_c, n_d = st.columns(4)
+        n_a.metric("True Positive Rate", f"{tpr2:.1f}%")
+        n_b.metric("Caught Count", f"{c2_c:,}")
+        n_c.metric("Missing Count", f"{m2_c:,}")
+        n_d.metric("% Missing", f"{pm2:.1f}%")
+        
+        n_e, n_f = st.columns(2)
+        n_e.metric("Legit False Positives", f"{fp2:,}")
+        n_f.metric("False Positive Rate", f"{fpr2:.2f}%")
         
         df_z2 = df[df['transaction_amount'] == 0].copy()
         df_z2['Outcome'] = 'Legit Allowed'
@@ -313,12 +349,11 @@ with tab2:
         st.plotly_chart(fig2, use_container_width=True)
 
 # ==============================================================================
-# TAB 3: MANAGER SIMULATOR (MOVED CONTROLS FROM SIDEBAR)
+# TAB 3: MANAGER SIMULATOR (Existing)
 # ==============================================================================
 with tab3:
     st.title("🎛️ Dynamic Fraud Strategy Simulator")
     
-    # 1. Controls are now in the Main Body, not Sidebar
     with st.expander("⚙️ **Strategy Controls**", expanded=True):
         col_c1, col_c2, col_c3 = st.columns(3)
         with col_c1:
@@ -329,7 +364,6 @@ with tab3:
         with col_c3:
             target_action = st.radio("Action for New Rule:", ["Manual Review", "2FA / Step-Up", "Decline"], index=1)
 
-    # 2. Logic & Metrics
     def run_strategy(df, decline_thresh, strict_geo, use_dt_rule, target_action):
         df['decision'] = 'Approve'
         df['reason'] = 'Clean'
@@ -362,7 +396,7 @@ with tab3:
     
     m1, m2, m3 = st.columns(3)
     m1.metric("💰 Fraud Volume Caught", f"${fraud_caught:,.0f}", f"{fraud_caught/total_fraud:.1%} of Total")
-    m2.metric("⚠️ False Positives", f"{fp_count:,}", "Good Customers Impacted")
+    m2.metric("⚠️ False Positives", f"{fp_count:,}")
     
     fig_dec = px.histogram(sim_df, x='decision', color='fraud_flag', 
                            title="Strategy Outcome",
@@ -373,4 +407,4 @@ with tab3:
 with open("app.py", "w") as f:
     f.write(code)
 
-print("app.py updated: Manager Controls moved to Tab 3 main body.")
+print("app.py updated: Dark tabs, TPR added, Full metrics in playgrounds.")
