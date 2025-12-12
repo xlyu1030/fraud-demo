@@ -1,4 +1,4 @@
-# Overwrite app.py with Base Version + New Credential Stuffing Lab Tab
+# Overwrite app.py with Fixed Checkbox Logic and Cleaned Report
 code = """
 import streamlit as st
 import pandas as pd
@@ -32,6 +32,7 @@ def load_data():
     df['is_traveling'] = df['user_country'] != df['ip_country']
     df['is_new_user'] = df['time_on_file'] < 1000
     
+    # Ensure numeric types
     cols_to_numeric = ['model_score', 'time_on_file', 'failed_logins_24h', 'transaction_amount', 
                        'login_attempts_24h', 'transaction_attempts', 'failed_transactions', 
                        'new_device', 'high_velocity_indicator']
@@ -60,13 +61,9 @@ def calculate_cs_metrics(df, rule_mask):
     fraud_zero = df_zero[df_zero['fraud_flag'] == 1]
     legit_zero = df_zero[df_zero['fraud_flag'] == 0]
     
-    # Caught: Fraud caught by rule
     caught = fraud_zero[rule_mask[df_zero.index]].shape[0]
-    
-    # Missing: Fraud missed by rule
     missing = fraud_zero[~rule_mask[df_zero.index]].shape[0]
     
-    # FPR: Legit ($0) caught / Total Legit ($0)
     fp_count = legit_zero[rule_mask[df_zero.index]].shape[0]
     total_legit = legit_zero.shape[0]
     fpr = (fp_count / total_legit * 100) if total_legit > 0 else 0.0
@@ -77,7 +74,7 @@ def calculate_cs_metrics(df, rule_mask):
 tab1, tab2, tab3 = st.tabs(["📊 Analyst Report (Insights)", "🤖 Credential Stuffing Lab", "🎛️ Manager Simulator"])
 
 # ==============================================================================
-# TAB 1: ANALYST REPORT (Original Base Content)
+# TAB 1: ANALYST REPORT (Insights)
 # ==============================================================================
 with tab1:
     st.title("🔎 ATO Fraud Analysis & Solution Proposal")
@@ -159,29 +156,24 @@ with tab1:
     
     # Helper for 3-Way Comparative Charts
     def plot_3way_comparison(zero_df, nonzero_df, legit_df, feature, title, bins=None):
-        # Function to process one dataframe
         def process_group(df, group_name):
             if bins:
                 counts = pd.cut(df[feature], bins=bins).value_counts(normalize=True).sort_index() * 100
                 counts.index = counts.index.astype(str)
             else:
-                # Use top N from the WHOLE dataset to ensure consistent X-axis
                 top_n = pd.concat([zero_df[feature], nonzero_df[feature], legit_df[feature]]).value_counts().head(10).index
                 counts = df[df[feature].isin(top_n)][feature].value_counts(normalize=True) * 100
-            
             return pd.DataFrame({
-                'Feature': counts.index.tolist(),
-                'Percentage': counts.values.tolist(),
+                'Feature': counts.index.tolist(), 
+                'Percentage': counts.values.tolist(), 
                 'Group': [group_name] * len(counts)
             })
 
-        # Process all 3 groups
-        df1 = process_group(zero_df, 'Credential Check')
-        df2 = process_group(nonzero_df, 'Theft')
-        df3 = process_group(legit_df, 'Legit')
-        
-        # Combine
-        plot_df = pd.concat([df1, df2, df3])
+        plot_df = pd.concat([
+            process_group(zero_df, 'Credential Check'), 
+            process_group(nonzero_df, 'Theft'), 
+            process_group(legit_df, 'Legit')
+        ])
         
         fig = px.bar(plot_df, x='Feature', y='Percentage', color='Group', barmode='group',
                      title=title, 
@@ -221,25 +213,10 @@ with tab1:
 
     st.divider()
 
-    # --- INSIGHT 2: The New Decision Tree Rule ---
-    st.subheader("2. Proposed 'Decision Tree' Logic")
-    st.markdown(\"\"\"
-    We trained a Decision Tree to find the optimal combination of rules. 
-    The **Best Path** identified captures **95% of fraud** with minimal friction.
-    \"\"\")
-    
-    st.info("💡 **New Rule Logic:** IF (Score > 500) AND (Tenure < 1170 days) AND (Failed Logins > 0)")
-    
-    perf_data = pd.DataFrame({
-        "Metric": ["Fraud Capture Rate", "False Positive Rate", "Volume Covered"],
-        "Current Rule": ["31%", "48%", "< 1%"],
-        "New Decision Tree": ["95%", "1%", "90%"]
-    })
-    
-    st.table(perf_data)
+    # NOTE: REMOVED "Proposed Decision Tree Logic" section as requested.
 
 # ==============================================================================
-# TAB 2: CREDENTIAL STUFFING LAB (NEW REQUEST)
+# TAB 2: CREDENTIAL STUFFING LAB (UPDATED LAYOUT)
 # ==============================================================================
 with tab2:
     st.title("🤖 Credential Stuffing Rule Lab")
@@ -275,32 +252,38 @@ with tab2:
     
     st.divider()
     
-    # --- PART 2: INTERACTIVE RULE BUILDER ---
+    # --- PART 2: INTERACTIVE RULE BUILDER (REORDERED) ---
     st.subheader("2. Interactive Rule Builder")
-    st.markdown("Adjust thresholds and combine conditions to design a **New Custom Rule**.")
+    st.markdown("Enable conditions and adjust thresholds to design a **New Custom Rule**.")
     
     col_settings, col_results = st.columns([1, 2])
     
     with col_settings:
-        st.markdown("**1. Adjust Cutoffs**")
-        p_login = st.slider("Login Attempts (Cutoff)", 0, 20, 4)
-        p_score = st.slider("Model Score (Cutoff)", 0, 1000, 800)
-        p_fail = st.slider("Failed Logins (Cutoff)", 0, 10, 2)
-        p_time = st.slider("Time on File (Cutoff)", 0, 3000, 1878)
-        p_txn = st.number_input("Transaction Attempts (Exact)", value=0, min_value=0)
+        st.markdown("**1. Select Conditions (AND Logic)**")
+        # Checkboxes FIRST (and defaulted to True)
+        # We use static labels to prevent state reset when sliders move
+        use_c1 = st.checkbox("Login Attempts (High)", value=True)
+        use_c2 = st.checkbox("Login Attempts (Low)", value=True)
+        use_c3 = st.checkbox("Model Score (High)", value=True)
+        use_c4 = st.checkbox("Failed Logins (High)", value=True)
+        use_c5 = st.checkbox("Transaction Attempts (Exact)", value=True)
+        use_c6 = st.checkbox("Time on File (Low)", value=True)
         
-        st.markdown("**2. Combine Conditions**")
-        use_c1 = st.checkbox(f"Login Attempts >= {p_login}", value=False)
-        use_c2 = st.checkbox(f"Login Attempts < {p_login}", value=False)
-        use_c3 = st.checkbox(f"Model Score >= {p_score}", value=False)
-        use_c4 = st.checkbox(f"Failed Logins >= {p_fail}", value=False)
-        use_c5 = st.checkbox(f"Transaction Attempts == {p_txn}", value=False)
-        use_c6 = st.checkbox(f"Time on File < {p_time}", value=False)
+        st.divider()
+        
+        st.markdown("**2. Adjust Cutoffs**")
+        # Sliders SECOND
+        p_login = st.slider("Login Attempts Threshold", 0, 20, 4)
+        p_score = st.slider("Model Score Threshold", 0, 1000, 800)
+        p_fail = st.slider("Failed Logins Threshold", 0, 10, 2)
+        p_time = st.slider("Time on File Threshold (Days)", 0, 3000, 1878)
+        p_txn = st.number_input("Transaction Attempts Value", value=0, min_value=0)
 
     with col_results:
         custom_mask = pd.Series([True] * len(df))
         conditions_selected = []
         
+        # Apply Logic based on selections and slider values
         if use_c1: 
             custom_mask &= (df['login_attempts_24h'] >= p_login)
             conditions_selected.append(f"Login >= {p_login}")
@@ -325,7 +308,7 @@ with tab2:
             st.warning("⚠️ No conditions selected. The rule is currently inactive.")
         else:
             logic_str = " AND ".join(conditions_selected)
-            st.success(f"**Current Logic:** {logic_str}")
+            st.info(f"**Current Rule Logic:** {logic_str}")
 
         c_caught, c_miss, c_fpr = calculate_cs_metrics(df, custom_mask)
         
@@ -351,25 +334,17 @@ with tab2:
         st.plotly_chart(fig, use_container_width=True)
 
 # ==============================================================================
-# TAB 3: MANAGER SIMULATOR (Original Content)
+# TAB 3: MANAGER SIMULATOR (Existing)
 # ==============================================================================
 with tab3:
     st.title("🎛️ Dynamic Fraud Strategy Simulator")
     
-    # --- SIDEBAR CONTROLS ---
-    st.sidebar.header("Strategy Controls")
-    
-    st.sidebar.subheader("1. Baseline Rules")
+    st.sidebar.header("Manager Simulator Controls")
     decline_thresh = st.sidebar.slider("Auto-Decline Score Threshold", 500, 1000, 950)
     strict_geo = st.sidebar.checkbox("Strict Geo-Blocking (Travelers)", False)
-    
-    st.sidebar.subheader("2. New Advanced Rules")
-    use_dt_rule = st.sidebar.checkbox("✅ Apply 'Amy's Decision Tree' Rule", value=True, 
-                                      help="Applies: Score > 500 & Tenure < 1170 & Failed Login > 0")
-    
+    use_dt_rule = st.sidebar.checkbox("✅ Apply 'Amy's Decision Tree' Rule", value=True)
     target_action = st.sidebar.radio("Action for New Rule:", ["Manual Review", "2FA / Step-Up", "Decline"], index=1)
 
-    # --- STRATEGY ENGINE ---
     def run_strategy(df, decline_thresh, strict_geo, use_dt_rule, target_action):
         df['decision'] = 'Approve'
         df['reason'] = 'Clean'
@@ -387,12 +362,7 @@ with tab3:
         df.loc[mask_score, 'reason'] = 'High Model Score'
         
         if use_dt_rule:
-            mask_dt = (
-                (df['decision'] == 'Approve') & 
-                (df['model_score'] > 500) & 
-                (df['time_on_file'] < 1170) & 
-                (df['failed_logins_24h'] > 0.5)
-            )
+            mask_dt = (df['decision'] == 'Approve') & (df['model_score'] > 500) & (df['time_on_file'] < 1170) & (df['failed_logins_24h'] > 0.5)
             df.loc[mask_dt, 'decision'] = target_action
             df.loc[mask_dt, 'reason'] = "Amy's DT Rule"
             
@@ -403,41 +373,19 @@ with tab3:
     
     fraud_caught = sim_df[(sim_df['decision'].isin(['Decline', '2FA / Step-Up'])) & (sim_df['fraud_flag'] == 1)]['transaction_amount'].sum()
     total_fraud = sim_df[sim_df['fraud_flag'] == 1]['transaction_amount'].sum()
-    
     fp_count = len(sim_df[(sim_df['decision'] != 'Approve') & (sim_df['fraud_flag'] == 0)])
     
-    queue_counts = sim_df['decision'].value_counts()
-    
     m1, m2, m3 = st.columns(3)
+    m1.metric("💰 Fraud Volume Caught", f"${fraud_caught:,.0f}", f"{fraud_caught/total_fraud:.1%} of Total")
+    m2.metric("⚠️ False Positives", f"{fp_count:,}")
     
-    with m1:
-        st.metric("💰 Fraud Volume Caught", f"${fraud_caught:,.0f}", 
-                  f"{fraud_caught/total_fraud:.1%} of Total")
-        
-    with m2:
-        st.metric("⚠️ False Positives (Friction)", f"{fp_count:,}", "Good Customers Impacted")
-        
-    with m3:
-        step_up_count = queue_counts.get("2FA / Step-Up", 0)
-        st.metric("📱 Sent to 2FA / Step-Up", f"{step_up_count:,}")
-
-    c1, c2 = st.columns([2, 1])
-    
-    with c1:
-        fig_dec = px.histogram(sim_df, x='decision', color='fraud_flag', 
-                               title="Strategy Outcome: Where did the Fraud Go?",
-                               color_discrete_map={0: 'lightgrey', 1: 'red'},
-                               labels={'fraud_flag': 'Is Fraud?'})
-        st.plotly_chart(fig_dec, use_container_width=True)
-        
-    with c2:
-        reason_counts = sim_df[sim_df['decision'] != 'Approve']['reason'].value_counts().reset_index()
-        reason_counts.columns = ['Reason', 'Count']
-        fig_reason = px.pie(reason_counts, values='Count', names='Reason', title="Why were they blocked?", hole=0.4)
-        st.plotly_chart(fig_reason, use_container_width=True)
+    fig_dec = px.histogram(sim_df, x='decision', color='fraud_flag', 
+                           title="Strategy Outcome",
+                           color_discrete_map={0: 'lightgrey', 1: 'red'})
+    st.plotly_chart(fig_dec, use_container_width=True)
 """
 
 with open("app.py", "w") as f:
     f.write(code)
 
-print("app.py successfully overwritten with Merged Version.")
+print("app.py updated with fixed checkbox state logic.")
