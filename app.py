@@ -1,4 +1,4 @@
-# Overwrite app.py with Independent Rule Builders
+# Overwrite app.py: Move Manager Controls from Sidebar to Tab 3 Main Body
 code = """
 import streamlit as st
 import pandas as pd
@@ -51,28 +51,22 @@ except Exception as e:
 
 # --- 3. HELPER FUNCTIONS ---
 def calculate_cs_metrics(df, rule_mask):
-    # Filter to $0 Population (Credential Stuffing Context)
     df_zero = df[df['transaction_amount'] == 0].copy()
-    
     if len(df_zero) == 0:
         return 0, 0, 0, 0.0, 0.0, 0.0
         
     fraud_zero = df_zero[df_zero['fraud_flag'] == 1]
     legit_zero = df_zero[df_zero['fraud_flag'] == 0]
     
-    # 1. Caught
     caught = fraud_zero[rule_mask[df_zero.index]].shape[0]
     total_fraud = fraud_zero.shape[0]
     pct_caught = (caught / total_fraud * 100) if total_fraud > 0 else 0.0
     
-    # 2. Missing
     missing = fraud_zero[~rule_mask[df_zero.index]].shape[0]
     pct_missing = (missing / total_fraud * 100) if total_fraud > 0 else 0.0
     
-    # 3. FP Count
     fp_count = legit_zero[rule_mask[df_zero.index]].shape[0]
     
-    # 4. FPR (User Defined)
     total_flagged = caught + fp_count
     fpr_user = (fp_count / total_flagged * 100) if total_flagged > 0 else 0.0
     
@@ -82,13 +76,12 @@ def calculate_cs_metrics(df, rule_mask):
 tab1, tab2, tab3 = st.tabs(["📊 Analyst Report (Insights)", "🤖 Credential Stuffing Lab", "🎛️ Manager Simulator"])
 
 # ==============================================================================
-# TAB 1: ANALYST REPORT (Insights)
+# TAB 1: ANALYST REPORT
 # ==============================================================================
 with tab1:
     st.title("🔎 ATO Fraud Analysis & Solution Proposal")
     st.markdown("### **Executive Summary**")
     
-    # --- SECTION 1: FINANCIAL IMPACT METRICS ---
     total_vol = df['transaction_amount'].sum()
     fraud_vol = df[df['fraud_flag'] == 1]['transaction_amount'].sum()
     fraud_vol_rate = (fraud_vol / total_vol) * 100
@@ -100,7 +93,6 @@ with tab1:
     avg_fraud_ticket = df[df['fraud_flag'] == 1]['transaction_amount'].mean()
     avg_overall_ticket = df['transaction_amount'].mean()
     
-    # % of Fraud that is $0
     zero_fraud_count = len(df[(df['fraud_flag'] == 1) & (df['transaction_amount'] == 0)])
     zero_fraud_pct = (zero_fraud_count / fraud_count) * 100
     
@@ -113,7 +105,7 @@ with tab1:
     
     st.divider()
 
-    # --- METRIC CALCULATIONS FOR VECTORS ---
+    # Metrics Calc
     legit_df = df[df['fraud_flag'] == 0]
     zero_fraud_df = df[(df['fraud_flag'] == 1) & (df['transaction_amount'] == 0)]
     nonzero_fraud_df = df[(df['fraud_flag'] == 1) & (df['transaction_amount'] > 0)]
@@ -133,7 +125,6 @@ with tab1:
     zero_metrics = get_metrics(zero_fraud_df, legit_df)
     nonzero_metrics = get_metrics(nonzero_fraud_df, legit_df)
 
-    # --- SECTION 2: CREDENTIAL STUFFING VECTORS ($0 FRAUD) ---
     st.markdown("#### 2. Credential Check Vectors ($0 Fraud)")
     r2c1, r2c2, r2c3, r2c4 = st.columns(4)
     (bot, b_bot), (cb, b_cb), (nd, b_nd), (vel, b_vel) = zero_metrics
@@ -142,7 +133,6 @@ with tab1:
     r2c3.metric("📱 New Device", f"{nd:.1f}%", f"vs {b_nd:.1f}% (Legit)")
     r2c4.metric("🚀 High Velocity", f"{vel:.1f}%", f"vs {b_vel:.1f}% (Legit)")
 
-    # --- SECTION 3: THEFT VECTORS (>$0 FRAUD) ---
     st.markdown("#### 3. Theft Vectors (>$0 Fraud)")
     r3c1, r3c2, r3c3, r3c4 = st.columns(4)
     (bot, b_bot), (cb, b_cb), (nd, b_nd), (vel, b_vel) = nonzero_metrics
@@ -153,7 +143,6 @@ with tab1:
     
     st.divider()
     
-    # --- CHARTS: 3-WAY COMPARISON ---
     st.subheader("1. Detailed Distribution Comparison")
     st.markdown(\"\"\"
     **Objective:** Compare the behavior of **Credential Checks**, **Theft**, and **Legit Users** side-by-side.
@@ -167,65 +156,39 @@ with tab1:
             else:
                 top_n = pd.concat([zero_df[feature], nonzero_df[feature], legit_df[feature]]).value_counts().head(10).index
                 counts = df[df[feature].isin(top_n)][feature].value_counts(normalize=True) * 100
-            return pd.DataFrame({
-                'Feature': counts.index.tolist(), 
-                'Percentage': counts.values.tolist(), 
-                'Group': [group_name] * len(counts)
-            })
+            return pd.DataFrame({'Feature': counts.index.tolist(), 'Percentage': counts.values.tolist(), 'Group': [group_name] * len(counts)})
 
-        plot_df = pd.concat([
-            process_group(zero_df, 'Credential Check'), 
-            process_group(nonzero_df, 'Theft'), 
-            process_group(legit_df, 'Legit')
-        ])
-        
+        plot_df = pd.concat([process_group(zero_df, 'Credential Check'), process_group(nonzero_df, 'Theft'), process_group(legit_df, 'Legit')])
         fig = px.bar(plot_df, x='Feature', y='Percentage', color='Group', barmode='group',
-                     title=title, 
-                     color_discrete_map={'Credential Check': '#FF4B4B', 'Theft': '#FFA15A', 'Legit': '#1F77B4'},
+                     title=title, color_discrete_map={'Credential Check': '#FF4B4B', 'Theft': '#FFA15A', 'Legit': '#1F77B4'},
                      labels={'Percentage': '% of Group'})
         return fig
 
-    # Row 1: Country & OS
     c1, c2 = st.columns(2)
-    with c1:
-        st.plotly_chart(plot_3way_comparison(zero_fraud_df, nonzero_fraud_df, legit_df, 'ip_country', "IP Country Distribution"), use_container_width=True)
-    with c2:
-        st.plotly_chart(plot_3way_comparison(zero_fraud_df, nonzero_fraud_df, legit_df, 'os_version', "OS Version Distribution"), use_container_width=True)
+    with c1: st.plotly_chart(plot_3way_comparison(zero_fraud_df, nonzero_fraud_df, legit_df, 'ip_country', "IP Country Distribution"), use_container_width=True)
+    with c2: st.plotly_chart(plot_3way_comparison(zero_fraud_df, nonzero_fraud_df, legit_df, 'os_version', "OS Version Distribution"), use_container_width=True)
 
-    # Row 2: Login Behavior
     c3, c4 = st.columns(2)
-    with c3:
-        st.plotly_chart(plot_3way_comparison(zero_fraud_df, nonzero_fraud_df, legit_df, 'login_attempts_24h', "Login Attempts (24h)"), use_container_width=True)
-    with c4:
-        st.plotly_chart(plot_3way_comparison(zero_fraud_df, nonzero_fraud_df, legit_df, 'failed_logins_24h', "Failed Logins (24h)"), use_container_width=True)
+    with c3: st.plotly_chart(plot_3way_comparison(zero_fraud_df, nonzero_fraud_df, legit_df, 'login_attempts_24h', "Login Attempts (24h)"), use_container_width=True)
+    with c4: st.plotly_chart(plot_3way_comparison(zero_fraud_df, nonzero_fraud_df, legit_df, 'failed_logins_24h', "Failed Logins (24h)"), use_container_width=True)
         
-    # Row 3: Transaction Behavior
     c5, c6 = st.columns(2)
-    with c5:
-        st.plotly_chart(plot_3way_comparison(zero_fraud_df, nonzero_fraud_df, legit_df, 'transaction_attempts', "Transaction Attempts"), use_container_width=True)
-    with c6:
-        st.plotly_chart(plot_3way_comparison(zero_fraud_df, nonzero_fraud_df, legit_df, 'failed_transactions', "Failed Transactions"), use_container_width=True)
+    with c5: st.plotly_chart(plot_3way_comparison(zero_fraud_df, nonzero_fraud_df, legit_df, 'transaction_attempts', "Transaction Attempts"), use_container_width=True)
+    with c6: st.plotly_chart(plot_3way_comparison(zero_fraud_df, nonzero_fraud_df, legit_df, 'failed_transactions', "Failed Transactions"), use_container_width=True)
 
-    # Row 4: Risk Indicators
     c7, c8 = st.columns(2)
-    with c7:
-        st.plotly_chart(plot_3way_comparison(zero_fraud_df, nonzero_fraud_df, legit_df, 'high_velocity_indicator', "High Velocity Indicator"), use_container_width=True)
-    with c8:
-        # Bin Model Score for readability
-        bins = [0, 200, 400, 600, 800, 1000]
-        st.plotly_chart(plot_3way_comparison(zero_fraud_df, nonzero_fraud_df, legit_df, 'model_score', "Model Score Distribution", bins=bins), use_container_width=True)
+    with c7: st.plotly_chart(plot_3way_comparison(zero_fraud_df, nonzero_fraud_df, legit_df, 'high_velocity_indicator', "High Velocity Indicator"), use_container_width=True)
+    with c8: st.plotly_chart(plot_3way_comparison(zero_fraud_df, nonzero_fraud_df, legit_df, 'model_score', "Model Score Distribution", bins=[0, 200, 400, 600, 800, 1000]), use_container_width=True)
 
     st.divider()
 
 # ==============================================================================
-# TAB 2: CREDENTIAL STUFFING LAB (SPLIT BUILDERS)
+# TAB 2: CREDENTIAL STUFFING LAB
 # ==============================================================================
 with tab2:
     st.title("🤖 Credential Stuffing Rule Lab")
     
-    # --- PART 1: PROPOSED RULES PERFORMANCE ---
     st.subheader("1. Proposed Rules Performance")
-    
     cond1 = (df['login_attempts_24h'] >= 4)
     cond2 = (df['login_attempts_24h'] < 4)
     cond3 = (df['model_score'] >= 800)
@@ -253,22 +216,17 @@ with tab2:
     
     st.divider()
     
-    # --- PART 2: RULE 1 BUILDER ---
+    # --- RULE 1 BUILDER ---
     st.subheader("2. Rule 1 Playground (Brute Force Logic)")
-    st.markdown("Experiment with **Login Volume** based rules.")
-    
     r1_sets, r1_res = st.columns([1, 2])
-    
     with r1_sets:
         st.markdown("**1. Select Conditions**")
-        # Defaults for Rule 1: Only Login >= X is relevant
         u1_c1 = st.checkbox("Login Attempts (High)", value=True, key="r1_c1")
         u1_c2 = st.checkbox("Login Attempts (Low)", value=False, key="r1_c2")
         u1_c3 = st.checkbox("Model Score (High)", value=False, key="r1_c3")
         u1_c4 = st.checkbox("Failed Logins (High)", value=False, key="r1_c4")
         u1_c5 = st.checkbox("Transaction Attempts (Exact)", value=False, key="r1_c5")
         u1_c6 = st.checkbox("Time on File (Low)", value=False, key="r1_c6")
-        
         st.divider()
         st.markdown("**2. Adjust Cutoffs**")
         p1_login = st.slider("Login Cutoff", 0, 20, 4, key="r1_sl_login")
@@ -287,48 +245,37 @@ with tab2:
         if u1_c5: mask1 &= (df['transaction_attempts'] == p1_txn); conds1.append(f"Txn=={p1_txn}")
         if u1_c6: mask1 &= (df['time_on_file'] < p1_time); conds1.append(f"Time<{p1_time}")
         
-        if not any([u1_c1, u1_c2, u1_c3, u1_c4, u1_c5, u1_c6]):
-            mask1 = pd.Series([False]*len(df))
-            st.warning("No conditions selected.")
-        else:
-            st.info(f"**Current Logic:** {' AND '.join(conds1)}")
+        if not any([u1_c1, u1_c2, u1_c3, u1_c4, u1_c5, u1_c6]): mask1 = pd.Series([False]*len(df))
+        else: st.info(f"**Logic:** {' AND '.join(conds1)}")
             
         c1, m1, fp1, pc1, pm1, fpr1 = calculate_cs_metrics(df, mask1)
-        
         c_a, c_b, c_c = st.columns(3)
         c_a.metric("% CS Caught", f"{pc1:.1f}%")
         c_b.metric("Legit FP Count", f"{fp1:,}")
         c_c.metric("False Positive Rate", f"{fpr1:.2f}%")
         
-        # Pie Chart
         df_z = df[df['transaction_amount'] == 0].copy()
         df_z['Outcome'] = 'Legit Allowed'
         df_z.loc[(df_z['fraud_flag']==1) & mask1[df_z.index], 'Outcome'] = 'Fraud Caught'
         df_z.loc[(df_z['fraud_flag']==1) & ~mask1[df_z.index], 'Outcome'] = 'Fraud Missed'
         df_z.loc[(df_z['fraud_flag']==0) & mask1[df_z.index], 'Outcome'] = 'False Positive'
         counts = df_z['Outcome'].value_counts()
-        fig = px.pie(values=counts.values, names=counts.index, height=300,
-                     color=counts.index, color_discrete_map={'Fraud Caught':'#2ca02c','Fraud Missed':'#d62728','False Positive':'#ff7f0e','Legit Allowed':'#1f77b4'})
+        fig = px.pie(values=counts.values, names=counts.index, height=300, color=counts.index, color_discrete_map={'Fraud Caught':'#2ca02c','Fraud Missed':'#d62728','False Positive':'#ff7f0e','Legit Allowed':'#1f77b4'})
         st.plotly_chart(fig, use_container_width=True)
 
     st.divider()
 
-    # --- PART 3: RULE 2 BUILDER ---
+    # --- RULE 2 BUILDER ---
     st.subheader("3. Rule 2 Playground (Complex Bot Logic)")
-    st.markdown("Experiment with **Multi-Condition** rules.")
-    
     r2_sets, r2_res = st.columns([1, 2])
-    
     with r2_sets:
         st.markdown("**1. Select Conditions**")
-        # Defaults for Rule 2: Complex Logic
         u2_c1 = st.checkbox("Login Attempts (High)", value=False, key="r2_c1")
         u2_c2 = st.checkbox("Login Attempts (Low)", value=True, key="r2_c2")
         u2_c3 = st.checkbox("Model Score (High)", value=True, key="r2_c3")
         u2_c4 = st.checkbox("Failed Logins (High)", value=True, key="r2_c4")
         u2_c5 = st.checkbox("Transaction Attempts (Exact)", value=True, key="r2_c5")
         u2_c6 = st.checkbox("Time on File (Low)", value=True, key="r2_c6")
-        
         st.divider()
         st.markdown("**2. Adjust Cutoffs**")
         p2_login = st.slider("Login Cutoff", 0, 20, 4, key="r2_sl_login")
@@ -347,42 +294,42 @@ with tab2:
         if u2_c5: mask2 &= (df['transaction_attempts'] == p2_txn); conds2.append(f"Txn=={p2_txn}")
         if u2_c6: mask2 &= (df['time_on_file'] < p2_time); conds2.append(f"Time<{p2_time}")
         
-        if not any([u2_c1, u2_c2, u2_c3, u2_c4, u2_c5, u2_c6]):
-            mask2 = pd.Series([False]*len(df))
-            st.warning("No conditions selected.")
-        else:
-            st.info(f"**Current Logic:** {' AND '.join(conds2)}")
+        if not any([u2_c1, u2_c2, u2_c3, u2_c4, u2_c5, u2_c6]): mask2 = pd.Series([False]*len(df))
+        else: st.info(f"**Logic:** {' AND '.join(conds2)}")
             
         c2_c, m2_c, fp2, pc2, pm2, fpr2 = calculate_cs_metrics(df, mask2)
-        
         c_x, c_y, c_z = st.columns(3)
         c_x.metric("% CS Caught", f"{pc2:.1f}%")
         c_y.metric("Legit FP Count", f"{fp2:,}")
         c_z.metric("False Positive Rate", f"{fpr2:.2f}%")
         
-        # Pie Chart
         df_z2 = df[df['transaction_amount'] == 0].copy()
         df_z2['Outcome'] = 'Legit Allowed'
         df_z2.loc[(df_z2['fraud_flag']==1) & mask2[df_z2.index], 'Outcome'] = 'Fraud Caught'
         df_z2.loc[(df_z2['fraud_flag']==1) & ~mask2[df_z2.index], 'Outcome'] = 'Fraud Missed'
         df_z2.loc[(df_z2['fraud_flag']==0) & mask2[df_z2.index], 'Outcome'] = 'False Positive'
         counts2 = df_z2['Outcome'].value_counts()
-        fig2 = px.pie(values=counts2.values, names=counts2.index, height=300,
-                     color=counts2.index, color_discrete_map={'Fraud Caught':'#2ca02c','Fraud Missed':'#d62728','False Positive':'#ff7f0e','Legit Allowed':'#1f77b4'})
+        fig2 = px.pie(values=counts2.values, names=counts2.index, height=300, color=counts2.index, color_discrete_map={'Fraud Caught':'#2ca02c','Fraud Missed':'#d62728','False Positive':'#ff7f0e','Legit Allowed':'#1f77b4'})
         st.plotly_chart(fig2, use_container_width=True)
 
 # ==============================================================================
-# TAB 3: MANAGER SIMULATOR (Existing)
+# TAB 3: MANAGER SIMULATOR (MOVED CONTROLS FROM SIDEBAR)
 # ==============================================================================
 with tab3:
     st.title("🎛️ Dynamic Fraud Strategy Simulator")
     
-    st.sidebar.header("Manager Simulator Controls")
-    decline_thresh = st.sidebar.slider("Auto-Decline Score Threshold", 500, 1000, 950)
-    strict_geo = st.sidebar.checkbox("Strict Geo-Blocking (Travelers)", False)
-    use_dt_rule = st.sidebar.checkbox("✅ Apply 'Amy's Decision Tree' Rule", value=True)
-    target_action = st.sidebar.radio("Action for New Rule:", ["Manual Review", "2FA / Step-Up", "Decline"], index=1)
+    # 1. Controls are now in the Main Body, not Sidebar
+    with st.expander("⚙️ **Strategy Controls**", expanded=True):
+        col_c1, col_c2, col_c3 = st.columns(3)
+        with col_c1:
+            decline_thresh = st.slider("Auto-Decline Score Threshold", 500, 1000, 950)
+        with col_c2:
+            strict_geo = st.checkbox("Strict Geo-Blocking (Travelers)", False)
+            use_dt_rule = st.checkbox("✅ Apply 'Amy's Decision Tree' Rule", value=True)
+        with col_c3:
+            target_action = st.radio("Action for New Rule:", ["Manual Review", "2FA / Step-Up", "Decline"], index=1)
 
+    # 2. Logic & Metrics
     def run_strategy(df, decline_thresh, strict_geo, use_dt_rule, target_action):
         df['decision'] = 'Approve'
         df['reason'] = 'Clean'
@@ -415,7 +362,7 @@ with tab3:
     
     m1, m2, m3 = st.columns(3)
     m1.metric("💰 Fraud Volume Caught", f"${fraud_caught:,.0f}", f"{fraud_caught/total_fraud:.1%} of Total")
-    m2.metric("⚠️ False Positives", f"{fp_count:,}")
+    m2.metric("⚠️ False Positives", f"{fp_count:,}", "Good Customers Impacted")
     
     fig_dec = px.histogram(sim_df, x='decision', color='fraud_flag', 
                            title="Strategy Outcome",
@@ -426,4 +373,4 @@ with tab3:
 with open("app.py", "w") as f:
     f.write(code)
 
-print("app.py updated with split independent rule builders.")
+print("app.py updated: Manager Controls moved to Tab 3 main body.")
