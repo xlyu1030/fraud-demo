@@ -1,4 +1,14 @@
-# Overwrite app.py with Policy Table, Reordered Metrics, and Reference Text
+import pandas as pd
+
+# Read the policy file to verify content
+try:
+    df_policy = pd.read_csv("Book1.xlsx - Sheet1.csv")
+    print("Policy File Content:")
+    print(df_policy.to_string())
+except Exception as e:
+    print(f"Error reading policy file: {e}")
+
+# Now overwrite app.py with the correct logic
 code = """
 import streamlit as st
 import pandas as pd
@@ -57,15 +67,12 @@ def load_data():
 @st.cache_data
 def load_policy_data():
     try:
-        # Load the new policy file
+        # Load the policy file directly
+        # Using encoding='utf-8' to handle potential special characters
         return pd.read_csv("Book1.xlsx - Sheet1.csv")
-    except:
-        # Fallback if file missing (for demo stability)
-        return pd.DataFrame({
-            "Policy Name": ["Velocity Limit", "High Value Check"],
-            "Vulnerability": ["Too static", "Bypassed by splitting"],
-            "Impact": ["High False Positives", "Misses micro-attacks"]
-        })
+    except Exception as e:
+        st.error(f"Error loading policy file: {e}")
+        return pd.DataFrame()
 
 try:
     df = load_data()
@@ -80,7 +87,6 @@ except Exception as e:
 
 # --- 3. HELPER FUNCTIONS ---
 def calculate_cs_metrics(df, rule_mask):
-    # Filter to $0 Population (Credential Stuffing Context)
     df_zero = df[df['transaction_amount'] == 0].copy()
     
     if len(df_zero) == 0:
@@ -89,23 +95,18 @@ def calculate_cs_metrics(df, rule_mask):
     fraud_zero = df_zero[df_zero['fraud_flag'] == 1]
     legit_zero = df_zero[df_zero['fraud_flag'] == 0]
     
-    # 1. Caught (True Positive)
     caught = fraud_zero[rule_mask[df_zero.index]].shape[0]
     total_fraud = fraud_zero.shape[0]
     pct_caught = (caught / total_fraud * 100) if total_fraud > 0 else 0.0
     
-    # 2. Missing (False Negative)
     missing = fraud_zero[~rule_mask[df_zero.index]].shape[0]
     pct_missing = (missing / total_fraud * 100) if total_fraud > 0 else 0.0
     
-    # 3. FP Count
     fp_count = legit_zero[rule_mask[df_zero.index]].shape[0]
     
-    # 4. FPR (User Defined: FP / (TP + FP))
     total_flagged = caught + fp_count
     fpr_user = (fp_count / total_flagged * 100) if total_flagged > 0 else 0.0
     
-    # 5. TPR (User Defined: Precision -> TP / (TP + FP))
     tpr_user = (caught / total_flagged * 100) if total_flagged > 0 else 0.0
     
     return caught, missing, fp_count, pct_caught, pct_missing, fpr_user, tpr_user
@@ -223,7 +224,11 @@ with tab1:
     # --- NEW SECTION: CURRENT POLICIES ---
     st.subheader("2. Current Fraud Policies and Vulnerabilities")
     st.markdown("Current system gaps identified during the audit:")
-    st.table(df_policy)
+    # Display the dataframe directly, no fallback to fake data
+    if not df_policy.empty:
+        st.table(df_policy)
+    else:
+        st.warning("Policy file not found or empty.")
 
 # ==============================================================================
 # TAB 2: CREDENTIAL STUFFING LAB
@@ -245,7 +250,6 @@ with tab2:
     r1_caught, r1_miss, r1_fp, r1_pct_caught, r1_pct_miss, r1_fpr, r1_tpr = calculate_cs_metrics(df, rule1_mask)
     r2_caught, r2_miss, r2_fp, r2_pct_caught, r2_pct_miss, r2_fpr, r2_tpr = calculate_cs_metrics(df, rule2_mask)
     
-    # REORDERED COLUMNS: Precision moved to 2nd to last
     res_data = {
         "Rule Name": ["Rule 1 (Brute Force)", "Rule 2 (Complex Bot)"],
         "Logic": ["Login Attempts >= 4", "Login<4 & Score>=800 & Fail>=2 & Txn==0 & Time<1878"],
@@ -254,7 +258,7 @@ with tab2:
         "CS Missing Count": [f"{r1_miss:,}", f"{r2_miss:,}"],
         "% CS Missing": [f"{r1_pct_miss:.1f}%", f"{r2_pct_miss:.1f}%"],
         "Legit FP Count": [f"{r1_fp:,}", f"{r2_fp:,}"],
-        "Precision (True CS Rate)": [f"{r1_tpr:.1f}%", f"{r2_tpr:.1f}%"], # Moved Here
+        "Precision (True CS Rate)": [f"{r1_tpr:.1f}%", f"{r2_tpr:.1f}%"],
         "False Positive Rate": [f"{r1_fpr:.2f}%", f"{r2_fpr:.2f}%"]
     }
     st.table(pd.DataFrame(res_data))
@@ -265,9 +269,7 @@ with tab2:
     st.subheader("2. Rule 1 Playground (Brute Force Logic)")
     r1_sets, r1_res = st.columns([1, 2])
     with r1_sets:
-        # ADDED REFERENCE TEXT
         st.info("**Suggested Reference:** Login Attempts >= 4")
-        
         st.markdown("**1. Select Conditions**")
         u1_c1 = st.checkbox("Login Attempts (High)", value=True, key="r1_c1")
         u1_c2 = st.checkbox("Login Attempts (Low)", value=False, key="r1_c2")
@@ -324,9 +326,7 @@ with tab2:
     st.subheader("3. Rule 2 Playground (Complex Bot Logic)")
     r2_sets, r2_res = st.columns([1, 2])
     with r2_sets:
-        # ADDED REFERENCE TEXT
         st.info("**Suggested Reference:** Login<4 & Score>=800 & Fail>=2 & Txn==0 & Time<1878")
-        
         st.markdown("**1. Select Conditions**")
         u2_c1 = st.checkbox("Login Attempts (High)", value=False, key="r2_c1")
         u2_c2 = st.checkbox("Login Attempts (Low)", value=True, key="r2_c2")
@@ -436,4 +436,4 @@ with tab3:
 with open("app.py", "w") as f:
     f.write(code)
 
-print("app.py updated with Policy Table, Reference Text, and Reordered Columns.")
+print("app.py updated with Policy Table from Book1.xlsx.")
