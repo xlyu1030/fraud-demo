@@ -1,4 +1,4 @@
-# Overwrite app.py with Renamed Precision Metric
+# Overwrite app.py with Policy Table, Reordered Metrics, and Reference Text
 code = """
 import streamlit as st
 import pandas as pd
@@ -54,8 +54,23 @@ def load_data():
         
     return df
 
+@st.cache_data
+def load_policy_data():
+    try:
+        # Load the new policy file
+        return pd.read_csv("Book1.xlsx - Sheet1.csv")
+    except:
+        # Fallback if file missing (for demo stability)
+        return pd.DataFrame({
+            "Policy Name": ["Velocity Limit", "High Value Check"],
+            "Vulnerability": ["Too static", "Bypassed by splitting"],
+            "Impact": ["High False Positives", "Misses micro-attacks"]
+        })
+
 try:
     df = load_data()
+    df_policy = load_policy_data()
+    
     if df.empty:
         st.error("DS_interview.csv not found!")
         st.stop()
@@ -91,8 +106,6 @@ def calculate_cs_metrics(df, rule_mask):
     fpr_user = (fp_count / total_flagged * 100) if total_flagged > 0 else 0.0
     
     # 5. TPR (User Defined: Precision -> TP / (TP + FP))
-    # Note: Standard TPR is Recall, but User explicitly requested Precision here.
-    # Label will be "Precision (True CS Rate)"
     tpr_user = (caught / total_flagged * 100) if total_flagged > 0 else 0.0
     
     return caught, missing, fp_count, pct_caught, pct_missing, fpr_user, tpr_user
@@ -206,6 +219,11 @@ with tab1:
     with c8: st.plotly_chart(plot_3way_comparison(zero_fraud_df, nonzero_fraud_df, legit_df, 'model_score', "Model Score Distribution", bins=[0, 200, 400, 600, 800, 1000]), use_container_width=True)
 
     st.divider()
+    
+    # --- NEW SECTION: CURRENT POLICIES ---
+    st.subheader("2. Current Fraud Policies and Vulnerabilities")
+    st.markdown("Current system gaps identified during the audit:")
+    st.table(df_policy)
 
 # ==============================================================================
 # TAB 2: CREDENTIAL STUFFING LAB
@@ -227,14 +245,16 @@ with tab2:
     r1_caught, r1_miss, r1_fp, r1_pct_caught, r1_pct_miss, r1_fpr, r1_tpr = calculate_cs_metrics(df, rule1_mask)
     r2_caught, r2_miss, r2_fp, r2_pct_caught, r2_pct_miss, r2_fpr, r2_tpr = calculate_cs_metrics(df, rule2_mask)
     
+    # REORDERED COLUMNS: Precision moved to 2nd to last
     res_data = {
         "Rule Name": ["Rule 1 (Brute Force)", "Rule 2 (Complex Bot)"],
         "Logic": ["Login Attempts >= 4", "Login<4 & Score>=800 & Fail>=2 & Txn==0 & Time<1878"],
-        "Precision (True CS Rate)": [f"{r1_tpr:.1f}%", f"{r2_tpr:.1f}%"], # Renamed as requested
         "% CS Caught (Recall)": [f"{r1_pct_caught:.1f}%", f"{r2_pct_caught:.1f}%"],
         "CS Caught Count": [f"{r1_caught:,}", f"{r2_caught:,}"],
         "CS Missing Count": [f"{r1_miss:,}", f"{r2_miss:,}"],
+        "% CS Missing": [f"{r1_pct_miss:.1f}%", f"{r2_pct_miss:.1f}%"],
         "Legit FP Count": [f"{r1_fp:,}", f"{r2_fp:,}"],
+        "Precision (True CS Rate)": [f"{r1_tpr:.1f}%", f"{r2_tpr:.1f}%"], # Moved Here
         "False Positive Rate": [f"{r1_fpr:.2f}%", f"{r2_fpr:.2f}%"]
     }
     st.table(pd.DataFrame(res_data))
@@ -245,6 +265,9 @@ with tab2:
     st.subheader("2. Rule 1 Playground (Brute Force Logic)")
     r1_sets, r1_res = st.columns([1, 2])
     with r1_sets:
+        # ADDED REFERENCE TEXT
+        st.info("**Suggested Reference:** Login Attempts >= 4")
+        
         st.markdown("**1. Select Conditions**")
         u1_c1 = st.checkbox("Login Attempts (High)", value=True, key="r1_c1")
         u1_c2 = st.checkbox("Login Attempts (Low)", value=False, key="r1_c2")
@@ -301,6 +324,9 @@ with tab2:
     st.subheader("3. Rule 2 Playground (Complex Bot Logic)")
     r2_sets, r2_res = st.columns([1, 2])
     with r2_sets:
+        # ADDED REFERENCE TEXT
+        st.info("**Suggested Reference:** Login<4 & Score>=800 & Fail>=2 & Txn==0 & Time<1878")
+        
         st.markdown("**1. Select Conditions**")
         u2_c1 = st.checkbox("Login Attempts (High)", value=False, key="r2_c1")
         u2_c2 = st.checkbox("Login Attempts (Low)", value=True, key="r2_c2")
@@ -352,7 +378,7 @@ with tab2:
         st.plotly_chart(fig2, use_container_width=True)
 
 # ==============================================================================
-# TAB 3: MANAGER SIMULATOR (Existing)
+# TAB 3: MANAGER SIMULATOR
 # ==============================================================================
 with tab3:
     st.title("🎛️ Dynamic Fraud Strategy Simulator")
@@ -410,4 +436,4 @@ with tab3:
 with open("app.py", "w") as f:
     f.write(code)
 
-print("app.py updated with renamed precision metric.")
+print("app.py updated with Policy Table, Reference Text, and Reordered Columns.")
