@@ -1,4 +1,4 @@
-# Overwrite app.py with Fixed Checkbox Logic and Cleaned Report
+# Overwrite app.py with Updated Metrics and User-Defined FPR Formula
 code = """
 import streamlit as st
 import pandas as pd
@@ -32,7 +32,6 @@ def load_data():
     df['is_traveling'] = df['user_country'] != df['ip_country']
     df['is_new_user'] = df['time_on_file'] < 1000
     
-    # Ensure numeric types
     cols_to_numeric = ['model_score', 'time_on_file', 'failed_logins_24h', 'transaction_amount', 
                        'login_attempts_24h', 'transaction_attempts', 'failed_transactions', 
                        'new_device', 'high_velocity_indicator']
@@ -56,19 +55,29 @@ def calculate_cs_metrics(df, rule_mask):
     df_zero = df[df['transaction_amount'] == 0].copy()
     
     if len(df_zero) == 0:
-        return 0, 0, 0.0
+        return 0, 0, 0, 0.0, 0.0, 0.0
         
     fraud_zero = df_zero[df_zero['fraud_flag'] == 1]
     legit_zero = df_zero[df_zero['fraud_flag'] == 0]
     
+    # 1. Caught (True Positive)
     caught = fraud_zero[rule_mask[df_zero.index]].shape[0]
+    total_fraud = fraud_zero.shape[0]
+    pct_caught = (caught / total_fraud * 100) if total_fraud > 0 else 0.0
+    
+    # 2. Missing (False Negative)
     missing = fraud_zero[~rule_mask[df_zero.index]].shape[0]
+    pct_missing = (missing / total_fraud * 100) if total_fraud > 0 else 0.0
     
+    # 3. False Positive Count (Legit Flagged)
     fp_count = legit_zero[rule_mask[df_zero.index]].shape[0]
-    total_legit = legit_zero.shape[0]
-    fpr = (fp_count / total_legit * 100) if total_legit > 0 else 0.0
     
-    return caught, missing, fpr
+    # 4. User-Defined FPR: FP / (TP + FP)
+    # (Count of legit flagged / Total flagged)
+    total_flagged = caught + fp_count
+    fpr_user = (fp_count / total_flagged * 100) if total_flagged > 0 else 0.0
+    
+    return caught, missing, fp_count, pct_caught, pct_missing, fpr_user
 
 # --- 4. TABS SETUP ---
 tab1, tab2, tab3 = st.tabs(["📊 Analyst Report (Insights)", "🤖 Credential Stuffing Lab", "🎛️ Manager Simulator"])
@@ -213,10 +222,8 @@ with tab1:
 
     st.divider()
 
-    # NOTE: REMOVED "Proposed Decision Tree Logic" section as requested.
-
 # ==============================================================================
-# TAB 2: CREDENTIAL STUFFING LAB (UPDATED LAYOUT)
+# TAB 2: CREDENTIAL STUFFING LAB (UPDATED METRICS)
 # ==============================================================================
 with tab2:
     st.title("🤖 Credential Stuffing Rule Lab")
@@ -238,21 +245,25 @@ with tab2:
     rule1_mask = cond1
     rule2_mask = cond2 & cond3 & cond4 & cond5 & cond6
     
-    r1_caught, r1_miss, r1_fpr = calculate_cs_metrics(df, rule1_mask)
-    r2_caught, r2_miss, r2_fpr = calculate_cs_metrics(df, rule2_mask)
+    # Calculate Metrics (Unpacking 6 values)
+    r1_caught, r1_miss, r1_fp, r1_pct_caught, r1_pct_miss, r1_fpr = calculate_cs_metrics(df, rule1_mask)
+    r2_caught, r2_miss, r2_fp, r2_pct_caught, r2_pct_miss, r2_fpr = calculate_cs_metrics(df, rule2_mask)
     
     res_data = {
         "Rule Name": ["Rule 1 (Brute Force)", "Rule 2 (Complex Bot)"],
         "Logic": ["Login Attempts >= 4", "Login<4 & Score>=800 & Fail>=2 & Txn==0 & Time<1878"],
         "CS Caught": [f"{r1_caught:,}", f"{r2_caught:,}"],
         "CS Missing": [f"{r1_miss:,}", f"{r2_miss:,}"],
-        "False Positive Rate ($0 Legit)": [f"{r1_fpr:.2f}%", f"{r2_fpr:.2f}%"]
+        "% CS Caught": [f"{r1_pct_caught:.1f}%", f"{r2_pct_caught:.1f}%"],
+        "% CS Missing": [f"{r1_pct_miss:.1f}%", f"{r2_pct_miss:.1f}%"],
+        "Legit FP Count": [f"{r1_fp:,}", f"{r2_fp:,}"],
+        "False Positive Rate (FP / All Flagged)": [f"{r1_fpr:.2f}%", f"{r2_fpr:.2f}%"]
     }
     st.table(pd.DataFrame(res_data))
     
     st.divider()
     
-    # --- PART 2: INTERACTIVE RULE BUILDER (REORDERED) ---
+    # --- PART 2: INTERACTIVE RULE BUILDER ---
     st.subheader("2. Interactive Rule Builder")
     st.markdown("Enable conditions and adjust thresholds to design a **New Custom Rule**.")
     
@@ -260,8 +271,6 @@ with tab2:
     
     with col_settings:
         st.markdown("**1. Select Conditions (AND Logic)**")
-        # Checkboxes FIRST (and defaulted to True)
-        # We use static labels to prevent state reset when sliders move
         use_c1 = st.checkbox("Login Attempts (High)", value=True)
         use_c2 = st.checkbox("Login Attempts (Low)", value=True)
         use_c3 = st.checkbox("Model Score (High)", value=True)
@@ -272,7 +281,6 @@ with tab2:
         st.divider()
         
         st.markdown("**2. Adjust Cutoffs**")
-        # Sliders SECOND
         p_login = st.slider("Login Attempts Threshold", 0, 20, 4)
         p_score = st.slider("Model Score Threshold", 0, 1000, 800)
         p_fail = st.slider("Failed Logins Threshold", 0, 10, 2)
@@ -283,7 +291,7 @@ with tab2:
         custom_mask = pd.Series([True] * len(df))
         conditions_selected = []
         
-        # Apply Logic based on selections and slider values
+        # Apply Logic
         if use_c1: 
             custom_mask &= (df['login_attempts_24h'] >= p_login)
             conditions_selected.append(f"Login >= {p_login}")
@@ -310,12 +318,20 @@ with tab2:
             logic_str = " AND ".join(conditions_selected)
             st.info(f"**Current Rule Logic:** {logic_str}")
 
-        c_caught, c_miss, c_fpr = calculate_cs_metrics(df, custom_mask)
+        # Metrics (Unpacking 6 values)
+        c_caught, c_miss, c_fp, c_pct_caught, c_pct_miss, c_fpr = calculate_cs_metrics(df, custom_mask)
         
+        # Display Metrics in 2 Rows
+        st.markdown("**Rule Efficiency**")
         m1, m2, m3 = st.columns(3)
-        m1.metric("CS Caught", f"{c_caught:,}")
-        m2.metric("CS Missing", f"{c_miss:,}")
-        m3.metric("False Positive Rate", f"{c_fpr:.2f}%")
+        m1.metric("% CS Caught", f"{c_pct_caught:.1f}%", help="Percentage of all $0 fraud captured")
+        m2.metric("CS Caught (Count)", f"{c_caught:,}")
+        m3.metric("CS Missing (Count)", f"{c_miss:,}")
+        
+        st.markdown("**Rule Friction**")
+        m4, m5 = st.columns(2)
+        m4.metric("Legit False Positives", f"{c_fp:,}", help="Count of legit $0 transactions blocked")
+        m5.metric("False Positive Rate", f"{c_fpr:.2f}%", help="Legit Blocked / Total Blocked (Precision Inverse)")
         
         # Pie Chart Visualization
         df_zero = df[df['transaction_amount'] == 0].copy()
@@ -334,7 +350,7 @@ with tab2:
         st.plotly_chart(fig, use_container_width=True)
 
 # ==============================================================================
-# TAB 3: MANAGER SIMULATOR (Existing)
+# TAB 3: MANAGER SIMULATOR (Original Content)
 # ==============================================================================
 with tab3:
     st.title("🎛️ Dynamic Fraud Strategy Simulator")
@@ -388,4 +404,4 @@ with tab3:
 with open("app.py", "w") as f:
     f.write(code)
 
-print("app.py updated with fixed checkbox state logic.")
+print("app.py updated with enhanced Credential Stuffing metrics.")
