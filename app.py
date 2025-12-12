@@ -1,4 +1,4 @@
-# Overwrite app.py with Hardcoded Policy Summary
+# Overwrite app.py with Tab 2 Cleanup and New Theft Lab
 code = """
 import streamlit as st
 import pandas as pd
@@ -66,9 +66,7 @@ except Exception as e:
 # --- 3. HELPER FUNCTIONS ---
 def calculate_cs_metrics(df, rule_mask):
     df_zero = df[df['transaction_amount'] == 0].copy()
-    
-    if len(df_zero) == 0:
-        return 0, 0, 0, 0.0, 0.0, 0.0, 0.0
+    if len(df_zero) == 0: return 0, 0, 0, 0.0, 0.0, 0.0, 0.0
         
     fraud_zero = df_zero[df_zero['fraud_flag'] == 1]
     legit_zero = df_zero[df_zero['fraud_flag'] == 0]
@@ -83,14 +81,67 @@ def calculate_cs_metrics(df, rule_mask):
     fp_count = legit_zero[rule_mask[df_zero.index]].shape[0]
     
     total_flagged = caught + fp_count
+    # FPR definition consistent with previous request: Legit Flagged / Total Flagged (Precision Inverse)
     fpr_user = (fp_count / total_flagged * 100) if total_flagged > 0 else 0.0
     
+    # Precision
     tpr_user = (caught / total_flagged * 100) if total_flagged > 0 else 0.0
     
     return caught, missing, fp_count, pct_caught, pct_missing, fpr_user, tpr_user
 
+def calculate_theft_metrics(df, rule_mask):
+    # Theft = Amount > 0
+    df_theft = df[df['transaction_amount'] > 0].copy()
+    if len(df_theft) == 0: return [0]*11
+    
+    fraud_theft = df_theft[df_theft['fraud_flag'] == 1]
+    legit_theft = df_theft[df_theft['fraud_flag'] == 0]
+    
+    # Caught
+    caught_df = fraud_theft[rule_mask[df_theft.index]]
+    caught_count = caught_df.shape[0]
+    caught_vol = caught_df['transaction_amount'].sum()
+    
+    # Totals
+    total_fraud_count = fraud_theft.shape[0]
+    total_fraud_vol = fraud_theft['transaction_amount'].sum()
+    
+    # Missing
+    missing_df = fraud_theft[~rule_mask[df_theft.index]]
+    missing_count = missing_df.shape[0]
+    missing_vol = missing_df['transaction_amount'].sum()
+    
+    # FP
+    fp_df = legit_theft[rule_mask[df_theft.index]]
+    fp_count = fp_df.shape[0]
+    
+    # Rates
+    recall_count = (caught_count / total_fraud_count * 100) if total_fraud_count > 0 else 0.0
+    recall_vol = (caught_vol / total_fraud_vol * 100) if total_fraud_vol > 0 else 0.0
+    pct_missing_count = (missing_count / total_fraud_count * 100) if total_fraud_count > 0 else 0.0
+    pct_missing_vol = (missing_vol / total_fraud_vol * 100) if total_fraud_vol > 0 else 0.0
+    
+    total_flagged = caught_count + fp_count
+    precision = (caught_count / total_flagged * 100) if total_flagged > 0 else 0.0
+    fpr_user = (fp_count / total_flagged * 100) if total_flagged > 0 else 0.0
+    
+    # Return 11 metrics in requested order
+    return [
+        recall_count,       # 0: % Theft Caught (Recall)
+        recall_vol,         # 1: % Theft Volume Caught
+        pct_missing_count,  # 2: % Theft Missing
+        pct_missing_vol,    # 3: % Theft Volume Missing
+        caught_count,       # 4: Fraud Theft Caught
+        caught_vol,         # 5: Fraud Theft Volume Caught
+        missing_count,      # 6: Fraud Theft Missing
+        missing_vol,        # 7: Fraud Theft Volume Missing
+        fp_count,           # 8: Legit False Positive Count
+        precision,          # 9: Precision
+        fpr_user            # 10: False Positive Rate
+    ]
+
 # --- 4. TABS SETUP ---
-tab1, tab2, tab3 = st.tabs(["📊 Analyst Report (Insights)", "🤖 Credential Stuffing Lab", "🎛️ Manager Simulator"])
+tab1, tab2, tab3, tab4 = st.tabs(["📊 Analyst Report", "🤖 Credential Stuffing Lab", "💸 Theft Rule Lab", "🎛️ Manager Simulator"])
 
 # ==============================================================================
 # TAB 1: ANALYST REPORT
@@ -199,10 +250,8 @@ with tab1:
 
     st.divider()
     
-    # --- NEW SECTION: CURRENT POLICIES (HARDCODED SUMMARY) ---
     st.subheader("2. Current Fraud Policies and Vulnerabilities")
     st.markdown("Summary of current system gaps based on audit:")
-    
     policy_data = {
         "Current Policy": [
             "Fraud rule: login from new device, unusual transaction amount",
@@ -240,12 +289,11 @@ with tab2:
     res_data = {
         "Rule Name": ["Rule 1 (Brute Force)", "Rule 2 (Complex Bot)"],
         "Logic": ["Login Attempts >= 4", "Login<4 & Score>=800 & Fail>=2 & Txn==0 & Time<1878"],
+        "Precision (True CS Rate)": [f"{r1_tpr:.1f}%", f"{r2_tpr:.1f}%"],
         "% CS Caught (Recall)": [f"{r1_pct_caught:.1f}%", f"{r2_pct_caught:.1f}%"],
         "CS Caught Count": [f"{r1_caught:,}", f"{r2_caught:,}"],
         "CS Missing Count": [f"{r1_miss:,}", f"{r2_miss:,}"],
-        "% CS Missing": [f"{r1_pct_miss:.1f}%", f"{r2_pct_miss:.1f}%"],
         "Legit FP Count": [f"{r1_fp:,}", f"{r2_fp:,}"],
-        "Precision (True CS Rate)": [f"{r1_tpr:.1f}%", f"{r2_tpr:.1f}%"],
         "False Positive Rate": [f"{r1_fpr:.2f}%", f"{r2_fpr:.2f}%"]
     }
     st.table(pd.DataFrame(res_data))
@@ -256,10 +304,10 @@ with tab2:
     st.subheader("2. Rule 1 Playground (Brute Force Logic)")
     r1_sets, r1_res = st.columns([1, 2])
     with r1_sets:
-        st.info("**Suggested Reference:** Login Attempts >= 4")
+        st.info("**Ref:** Login Attempts >= 4")
         st.markdown("**1. Select Conditions**")
         u1_c1 = st.checkbox("Login Attempts (High)", value=True, key="r1_c1")
-        u1_c2 = st.checkbox("Login Attempts (Low)", value=False, key="r1_c2")
+        # EXCLUSIVE REMOVED: u1_c2 Login Low
         u1_c3 = st.checkbox("Model Score (High)", value=False, key="r1_c3")
         u1_c4 = st.checkbox("Failed Logins (High)", value=False, key="r1_c4")
         u1_c5 = st.checkbox("Transaction Attempts (Exact)", value=False, key="r1_c5")
@@ -276,13 +324,12 @@ with tab2:
         mask1 = pd.Series([True] * len(df))
         conds1 = []
         if u1_c1: mask1 &= (df['login_attempts_24h'] >= p1_login); conds1.append(f"Login>={p1_login}")
-        if u1_c2: mask1 &= (df['login_attempts_24h'] < p1_login); conds1.append(f"Login<{p1_login}")
         if u1_c3: mask1 &= (df['model_score'] >= p1_score); conds1.append(f"Score>={p1_score}")
         if u1_c4: mask1 &= (df['failed_logins_24h'] >= p1_fail); conds1.append(f"Fail>={p1_fail}")
         if u1_c5: mask1 &= (df['transaction_attempts'] == p1_txn); conds1.append(f"Txn=={p1_txn}")
         if u1_c6: mask1 &= (df['time_on_file'] < p1_time); conds1.append(f"Time<{p1_time}")
         
-        if not any([u1_c1, u1_c2, u1_c3, u1_c4, u1_c5, u1_c6]): mask1 = pd.Series([False]*len(df))
+        if not any([u1_c1, u1_c3, u1_c4, u1_c5, u1_c6]): mask1 = pd.Series([False]*len(df))
         else: st.info(f"**Logic:** {' AND '.join(conds1)}")
             
         c1, m1, fp1, pc1, pm1, fpr1, tpr1 = calculate_cs_metrics(df, mask1)
@@ -313,9 +360,9 @@ with tab2:
     st.subheader("3. Rule 2 Playground (Complex Bot Logic)")
     r2_sets, r2_res = st.columns([1, 2])
     with r2_sets:
-        st.info("**Suggested Reference:** Login<4 & Score>=800 & Fail>=2 & Txn==0 & Time<1878")
+        st.info("**Ref:** Login<4 & Score>=800 & Fail>=2 & Txn==0 & Time<1878")
         st.markdown("**1. Select Conditions**")
-        u2_c1 = st.checkbox("Login Attempts (High)", value=False, key="r2_c1")
+        # EXCLUSIVE REMOVED: u2_c1 Login High
         u2_c2 = st.checkbox("Login Attempts (Low)", value=True, key="r2_c2")
         u2_c3 = st.checkbox("Model Score (High)", value=True, key="r2_c3")
         u2_c4 = st.checkbox("Failed Logins (High)", value=True, key="r2_c4")
@@ -332,14 +379,13 @@ with tab2:
     with r2_res:
         mask2 = pd.Series([True] * len(df))
         conds2 = []
-        if u2_c1: mask2 &= (df['login_attempts_24h'] >= p2_login); conds2.append(f"Login>={p2_login}")
         if u2_c2: mask2 &= (df['login_attempts_24h'] < p2_login); conds2.append(f"Login<{p2_login}")
         if u2_c3: mask2 &= (df['model_score'] >= p2_score); conds2.append(f"Score>={p2_score}")
         if u2_c4: mask2 &= (df['failed_logins_24h'] >= p2_fail); conds2.append(f"Fail>={p2_fail}")
         if u2_c5: mask2 &= (df['transaction_attempts'] == p2_txn); conds2.append(f"Txn=={p2_txn}")
         if u2_c6: mask2 &= (df['time_on_file'] < p2_time); conds2.append(f"Time<{p2_time}")
         
-        if not any([u2_c1, u2_c2, u2_c3, u2_c4, u2_c5, u2_c6]): mask2 = pd.Series([False]*len(df))
+        if not any([u2_c2, u2_c3, u2_c4, u2_c5, u2_c6]): mask2 = pd.Series([False]*len(df))
         else: st.info(f"**Logic:** {' AND '.join(conds2)}")
             
         c2_c, m2_c, fp2, pc2, pm2, fpr2, tpr2 = calculate_cs_metrics(df, mask2)
@@ -365,9 +411,131 @@ with tab2:
         st.plotly_chart(fig2, use_container_width=True)
 
 # ==============================================================================
-# TAB 3: MANAGER SIMULATOR (Existing)
+# TAB 3: THEFT RULE LAB (NEW)
 # ==============================================================================
 with tab3:
+    st.title("💸 Theft Rule Lab")
+    st.markdown("**Context:** Transactions > $0.")
+    
+    # 1. Define Rules (Proposed Logic)
+    # Rule 1: Score>=500 & Time<=1000 & FailLog>=1 & FailTxn>=1
+    t1_c1 = (df['model_score'] >= 500)
+    t1_c2 = (df['time_on_file'] <= 1000)
+    t1_c3 = (df['failed_logins_24h'] >= 1)
+    t1_c4 = (df['failed_transactions'] >= 1)
+    rule1_theft = t1_c1 & t1_c2 & t1_c3 & t1_c4
+    
+    # Rule 2: ~Theft_condition1 (Score < 500) & Theft_condition5 (Login >= 4)
+    t2_c1 = (df['model_score'] < 500)
+    t2_c2 = (df['login_attempts_24h'] >= 4)
+    rule2_theft = t2_c1 & t2_c2
+    
+    # 2. Calculate
+    m1 = calculate_theft_metrics(df, rule1_theft)
+    m2 = calculate_theft_metrics(df, rule2_theft)
+    
+    # 3. Table
+    st.subheader("1. Proposed Theft Rules Performance")
+    t_data = {
+        "Rule": ["Rule 1 (High Score/Failure)", "Rule 2 (Low Score/High Login)"],
+        "% Theft Caught (Recall)": [f"{m1[0]:.1f}%", f"{m2[0]:.1f}%"],
+        "% Theft Volume Caught": [f"{m1[1]:.1f}%", f"{m2[1]:.1f}%"],
+        "% Theft Missing": [f"{(100-m1[0]):.1f}%", f"{(100-m2[0]):.1f}%"],
+        "% Theft Volume Missing": [f"{(100-m1[1]):.1f}%", f"{(100-m2[1]):.1f}%"],
+        "Fraud Theft Caught": [f"{m1[4]:,}", f"{m2[4]:,}"],
+        "Fraud Theft Vol Caught": [f"${m1[5]:,.0f}", f"${m2[5]:,.0f}"],
+        "Fraud Theft Missing": [f"{m1[6]:,}", f"{m2[6]:,}"],
+        "Fraud Theft Vol Missing": [f"${m1[7]:,.0f}", f"${m2[7]:,.0f}"],
+        "Legit FP Count": [f"{m1[8]:,}", f"{m2[8]:,}"],
+        "Precision (True Theft Rate)": [f"{m1[9]:.1f}%", f"{m2[9]:.1f}%"],
+        "False Positive Rate": [f"{m1[10]:.1f}%", f"{m2[10]:.1f}%"]
+    }
+    st.dataframe(pd.DataFrame(t_data))
+    
+    st.divider()
+    
+    # Helper to show metrics in playgrounds
+    def show_theft_stats(met):
+        r1_a, r1_b, r1_c, r1_d = st.columns(4)
+        r1_a.metric("% Recall (Count)", f"{met[0]:.1f}%")
+        r1_b.metric("% Recall (Vol)", f"{met[1]:.1f}%")
+        r1_c.metric("Caught Count", f"{met[4]:,}")
+        r1_d.metric("Caught Vol", f"${met[5]:,.0f}")
+        
+        r2_a, r2_b, r2_c, r2_d = st.columns(4)
+        r2_a.metric("Precision", f"{met[9]:.1f}%")
+        r2_b.metric("Legit FP", f"{met[8]:,}")
+        r2_c.metric("FPR", f"{met[10]:.1f}%")
+        r2_d.metric("Missing Vol", f"${met[7]:,.0f}")
+
+    # --- Playground 1 ---
+    st.subheader("2. Theft Rule 1 Playground")
+    col_t1a, col_t1b = st.columns([1, 2])
+    with col_t1a:
+        st.info("**Ref:** Score>=500 & Time<=1000 & FailLog>=1 & FailTxn>=1")
+        use_t1_c1 = st.checkbox("Score (High)", True, key="t1_c1")
+        use_t1_c2 = st.checkbox("Time (Low)", True, key="t1_c2")
+        use_t1_c3 = st.checkbox("Fail Log (High)", True, key="t1_c3")
+        use_t1_c4 = st.checkbox("Fail Txn (High)", True, key="t1_c4")
+        st.markdown("---")
+        val_t1_score = st.slider("Score Cutoff", 0, 1000, 500, key="t1s_score")
+        val_t1_time = st.slider("Time Cutoff", 0, 3000, 1000, key="t1s_time")
+        val_t1_fail = st.slider("Fail Logins Cutoff", 0, 10, 1, key="t1s_fail")
+        val_t1_ftxn = st.slider("Fail Txn Cutoff", 0, 10, 1, key="t1s_ftxn")
+    
+    with col_t1b:
+        mask_t1 = pd.Series([True]*len(df))
+        if use_t1_c1: mask_t1 &= (df['model_score'] >= val_t1_score)
+        if use_t1_c2: mask_t1 &= (df['time_on_file'] <= val_t1_time)
+        if use_t1_c3: mask_t1 &= (df['failed_logins_24h'] >= val_t1_fail)
+        if use_t1_c4: mask_t1 &= (df['failed_transactions'] >= val_t1_ftxn)
+        
+        tm1 = calculate_theft_metrics(df, mask_t1)
+        show_theft_stats(tm1)
+        
+        df_t = df[df['transaction_amount'] > 0].copy()
+        df_t['Outcome'] = 'Legit Allowed'
+        df_t.loc[(df_t['fraud_flag']==1) & mask_t1[df_t.index], 'Outcome'] = 'Theft Caught'
+        df_t.loc[(df_t['fraud_flag']==1) & ~mask_t1[df_t.index], 'Outcome'] = 'Theft Missed'
+        df_t.loc[(df_t['fraud_flag']==0) & mask_t1[df_t.index], 'Outcome'] = 'False Positive'
+        fig_t1 = px.pie(df_t, names='Outcome', title="Rule 1 Distribution", color='Outcome', height=300,
+                        color_discrete_map={'Theft Caught':'#2ca02c', 'Theft Missed':'#d62728', 'False Positive':'#ff7f0e', 'Legit Allowed':'#1f77b4'})
+        st.plotly_chart(fig_t1, use_container_width=True)
+
+    st.divider()
+    
+    # --- Playground 2 ---
+    st.subheader("3. Theft Rule 2 Playground")
+    col_t2a, col_t2b = st.columns([1, 2])
+    with col_t2a:
+        st.info("**Ref:** Score<500 & Login>=4")
+        use_t2_c1 = st.checkbox("Score (Low)", True, key="t2_c1")
+        use_t2_c2 = st.checkbox("Login (High)", True, key="t2_c2")
+        st.markdown("---")
+        val_t2_score = st.slider("Score Cutoff", 0, 1000, 500, key="t2s_score")
+        val_t2_login = st.slider("Login Cutoff", 0, 20, 4, key="t2s_login")
+    
+    with col_t2b:
+        mask_t2 = pd.Series([True]*len(df))
+        if use_t2_c1: mask_t2 &= (df['model_score'] < val_t2_score)
+        if use_t2_c2: mask_t2 &= (df['login_attempts_24h'] >= val_t2_login)
+        
+        tm2 = calculate_theft_metrics(df, mask_t2)
+        show_theft_stats(tm2)
+        
+        df_t2 = df[df['transaction_amount'] > 0].copy()
+        df_t2['Outcome'] = 'Legit Allowed'
+        df_t2.loc[(df_t2['fraud_flag']==1) & mask_t2[df_t2.index], 'Outcome'] = 'Theft Caught'
+        df_t2.loc[(df_t2['fraud_flag']==1) & ~mask_t2[df_t2.index], 'Outcome'] = 'Theft Missed'
+        df_t2.loc[(df_t2['fraud_flag']==0) & mask_t2[df_t2.index], 'Outcome'] = 'False Positive'
+        fig_t2 = px.pie(df_t2, names='Outcome', title="Rule 2 Distribution", color='Outcome', height=300,
+                        color_discrete_map={'Theft Caught':'#2ca02c', 'Theft Missed':'#d62728', 'False Positive':'#ff7f0e', 'Legit Allowed':'#1f77b4'})
+        st.plotly_chart(fig_t2, use_container_width=True)
+
+# ==============================================================================
+# TAB 4: MANAGER SIMULATOR (Moved)
+# ==============================================================================
+with tab4:
     st.title("🎛️ Dynamic Fraud Strategy Simulator")
     
     with st.expander("⚙️ **Strategy Controls**", expanded=True):
@@ -383,44 +551,41 @@ with tab3:
     def run_strategy(df, decline_thresh, strict_geo, use_dt_rule, target_action):
         df['decision'] = 'Approve'
         df['reason'] = 'Clean'
-        
         df.loc[df['high_velocity_indicator'] == 1, 'decision'] = 'Decline'
         df.loc[df['high_velocity_indicator'] == 1, 'reason'] = 'High Velocity'
-        
         if strict_geo:
             mask = df['is_traveling']
             df.loc[mask, 'decision'] = 'Decline'
             df.loc[mask, 'reason'] = 'Geo Mismatch'
-            
         mask_score = (df['decision'] == 'Approve') & (df['model_score'] > decline_thresh)
         df.loc[mask_score, 'decision'] = 'Decline'
         df.loc[mask_score, 'reason'] = 'High Model Score'
-        
         if use_dt_rule:
             mask_dt = (df['decision'] == 'Approve') & (df['model_score'] > 500) & (df['time_on_file'] < 1170) & (df['failed_logins_24h'] > 0.5)
             df.loc[mask_dt, 'decision'] = target_action
             df.loc[mask_dt, 'reason'] = "Amy's DT Rule"
-            
         return df
 
     sim_df = df.copy()
     sim_df = run_strategy(sim_df, decline_thresh, strict_geo, use_dt_rule, target_action)
     
-    fraud_caught = sim_df[(sim_df['decision'].isin(['Decline', '2FA / Step-Up'])) & (sim_df['fraud_flag'] == 1)]['transaction_amount'].sum()
+    # Calculate Total Fraud LOCAL variable to avoid errors
     total_fraud = sim_df[sim_df['fraud_flag'] == 1]['transaction_amount'].sum()
+    fraud_caught = sim_df[(sim_df['decision'].isin(['Decline', '2FA / Step-Up'])) & (sim_df['fraud_flag'] == 1)]['transaction_amount'].sum()
     fp_count = len(sim_df[(sim_df['decision'] != 'Approve') & (sim_df['fraud_flag'] == 0)])
     
     m1, m2, m3 = st.columns(3)
-    m1.metric("💰 Fraud Volume Caught", f"${fraud_caught:,.0f}", f"{fraud_caught/total_fraud:.1%} of Total")
+    if total_fraud > 0:
+        m1.metric("💰 Fraud Volume Caught", f"${fraud_caught:,.0f}", f"{fraud_caught/total_fraud:.1%} of Total")
+    else:
+        m1.metric("💰 Fraud Volume Caught", f"${fraud_caught:,.0f}", "0% of Total")
     m2.metric("⚠️ False Positives", f"{fp_count:,}", "Good Customers Impacted")
     
-    fig_dec = px.histogram(sim_df, x='decision', color='fraud_flag', 
-                           title="Strategy Outcome",
-                           color_discrete_map={0: 'lightgrey', 1: 'red'})
+    fig_dec = px.histogram(sim_df, x='decision', color='fraud_flag', title="Strategy Outcome", color_discrete_map={0: 'lightgrey', 1: 'red'})
     st.plotly_chart(fig_dec, use_container_width=True)
 """
 
 with open("app.py", "w") as f:
     f.write(code)
 
-print("app.py updated with hardcoded policy table.")
+print("app.py updated with new Tab 3 Theft Lab and Tab 2 cleanups.")
