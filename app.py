@@ -1,5 +1,3 @@
-
-
 # Now overwrite app.py with the correct logic
 code = """
 import streamlit as st
